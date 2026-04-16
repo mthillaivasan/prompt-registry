@@ -19,6 +19,7 @@ from app.routers import auth as auth_router
 from app.routers import health as health_router
 from app.routers import compliance as compliance_router
 from app.routers import prompts as prompts_router
+from app.routers import upgrade as upgrade_router
 from app.routers import versions as versions_router
 from app.seed import run_seed
 from app.triggers import create_triggers_and_indexes
@@ -47,4 +48,5 @@ app.include_router(auth_router.router)
 app.include_router(health_router.router)
 app.include_router(compliance_router.router)
 app.include_router(prompts_router.router)
+app.include_router(upgrade_router.router)
 app.include_router(versions_router.router)

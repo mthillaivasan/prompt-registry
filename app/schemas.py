@@ -149,3 +149,91 @@ class ComplianceJobOut(BaseModel):
     error_message: str | None
     force_refresh: bool
     result: ComplianceCheckOut | None = None
+
+
+# ── Upgrade / Import schemas ────────────────────────────────────────────────
+
+class AnalyseRequest(BaseModel):
+    prompt_text: str = Field(min_length=1)
+    prompt_name: str | None = None
+    prompt_id: str | None = None
+    source_version_id: str | None = None
+
+
+class AnalyseResponse(BaseModel):
+    proposal_id: str
+    job_id: str
+    status: str
+
+
+class FindingOut(BaseModel):
+    finding_id: str
+    dimension_code: str
+    dimension_name: str
+    framework: str
+    current_score: int
+    current_finding: str
+    severity: str
+    source_reference: str
+
+
+class SuggestionOut(BaseModel):
+    suggestion_id: str
+    finding_id: str | None = None
+    dimension_code: str
+    change_type: str
+    description: str
+    suggested_text: str
+    rationale: str
+    expected_score_improvement: dict | None = None
+    insertion_hint: str | None = None
+
+
+class UserResponseOut(BaseModel):
+    suggestion_id: str
+    response: str
+    modified_text: str | None = None
+    user_note: str | None = None
+    responded_at: str
+    responded_by: str
+
+
+class UserResponseRequest(BaseModel):
+    suggestion_id: str
+    response: str = Field(pattern="^(Accepted|Rejected|Modified)$")
+    modified_text: str | None = None
+    user_note: str | None = None
+
+
+class AbandonRequest(BaseModel):
+    reason: str = Field(min_length=1)
+
+
+class ApplyRequest(BaseModel):
+    prompt_id: str | None = None
+
+
+class ApplyResponse(BaseModel):
+    version_id: str
+    compliance_job_id: str
+
+
+class ProposalOut(BaseModel):
+    proposal_id: str
+    prompt_id: str | None
+    source_version_id: str | None
+    proposed_at: str | None
+    proposed_by: str
+    status: str
+    inferred_purpose: str | None
+    inferred_prompt_type: str | None
+    inferred_risk_tier: str | None
+    classification_confidence: str | None
+    findings: list[FindingOut] = []
+    suggestions: list[SuggestionOut] = []
+    user_responses: list[UserResponseOut] = []
+    responses_recorded_at: str | None
+    resulting_version_id: str | None
+    applied_at: str | None
+    applied_by: str | None
+    abandoned_reason: str | None
