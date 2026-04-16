@@ -48,3 +48,72 @@ class PromptOut(BaseModel):
 
 class PromptDetail(PromptOut):
     versions: list[PromptVersionOut] = []
+
+
+# --- Scoring Dimension schemas ---
+
+class ScoringDimensionOut(BaseModel):
+    id: int
+    framework: str
+    code: str
+    name: str
+    description: str
+    scoring_type: str
+    is_mandatory: bool
+    blocking_threshold: int | None
+    score_5_criteria: str
+    weight: float
+    active: bool
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# --- Compliance schemas ---
+
+class ComplianceCheckRequest(BaseModel):
+    version_id: int
+    requested_by: str = "system"
+    force_refresh: bool = False
+
+
+class DimensionScoreOut(BaseModel):
+    code: str
+    name: str
+    framework: str
+    score: int
+    rationale: str
+
+
+class AnomalyOut(BaseModel):
+    result: str  # clean/suspicious/compromised
+    confidence: float
+    reason: str
+
+
+class ComplianceResultOut(BaseModel):
+    id: int
+    version_id: int
+    gold_score: float
+    blocked: bool
+    scores: list[DimensionScoreOut]
+    anomaly: AnomalyOut
+    cache_valid: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ComplianceJobOut(BaseModel):
+    job_id: str
+    version_id: int
+    requested_by: str
+    requested_at: datetime
+    status: str  # Queued/Running/Complete/Failed
+    started_at: datetime | None
+    completed_at: datetime | None
+    error_message: str
+    force_refresh: bool
+    result: ComplianceResultOut | None = None
+
+    model_config = {"from_attributes": True}
