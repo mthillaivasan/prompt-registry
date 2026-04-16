@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,14 +17,12 @@ try:
 finally:
     db.close()
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
-
 app = FastAPI(title="Prompt Registry", version="0.1.0")
 
 
 @app.get("/")
-def root():
-    return FileResponse(path=str(STATIC_DIR / "base.html"), media_type="text/html")
+async def root():
+    return FileResponse("static/base.html")
 
 
 @app.get("/health")
@@ -37,5 +33,4 @@ def health():
 app.include_router(router)
 app.include_router(compliance_router)
 app.include_router(upgrade_router)
-# Mount static files last so it doesn't shadow API routes
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
