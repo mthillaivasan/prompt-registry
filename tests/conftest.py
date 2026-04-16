@@ -18,6 +18,11 @@ TestSession = sessionmaker(bind=engine)
 @pytest.fixture(autouse=True)
 def setup_db():
     Base.metadata.create_all(bind=engine)
+    # Seed dimensions for every test
+    from app.seed import seed_dimensions
+    session = TestSession()
+    seed_dimensions(session)
+    session.close()
     yield
     Base.metadata.drop_all(bind=engine)
 
