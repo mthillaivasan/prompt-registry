@@ -78,6 +78,26 @@ label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
 .empty-state{text-align:center;padding:60px 20px;color:var(--text2)}.empty-state h3{margin-bottom:8px;color:var(--text)}
 .login-box{max-width:380px;margin:80px auto;padding:32px;background:var(--surface);border:1px solid var(--border);border-radius:12px}
 .login-box h2{margin-bottom:20px;text-align:center}
+/* Help modal */
+.help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:none;align-items:center;justify-content:center}
+.help-overlay.open{display:flex}
+.help-modal{background:var(--bg);border:1px solid var(--border);border-radius:12px;width:90vw;max-width:1100px;height:85vh;display:flex;overflow:hidden;position:relative}
+.help-sidebar{width:260px;min-width:260px;background:var(--surface);border-right:1px solid var(--border);padding:20px 0;overflow-y:auto}
+.help-sidebar a{display:block;padding:8px 20px;font-size:13px;color:var(--text2);cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+.help-sidebar a:hover{color:var(--text);background:var(--surface2)}
+.help-sidebar a.active{color:var(--accent);background:rgba(108,138,255,.08);border-left-color:var(--accent)}
+.help-content{flex:1;padding:32px 40px;overflow-y:auto}
+.help-content h2{font-size:20px;margin-bottom:16px;color:var(--text)}
+.help-content h3{font-size:15px;margin:20px 0 8px;color:var(--accent)}
+.help-content p,.help-content li{font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:8px}
+.help-content ul,.help-content ol{padding-left:20px;margin-bottom:12px}
+.help-content code{background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:13px;color:var(--accent)}
+.help-content .dim-table{width:100%;font-size:13px;margin:12px 0}
+.help-content .dim-table th{font-size:11px;padding:6px 8px}
+.help-content .dim-table td{padding:6px 8px;font-size:13px}
+.help-section{display:none}.help-section.active{display:block}
+.help-close{position:absolute;top:16px;right:20px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer;z-index:2;line-height:1}
+.help-close:hover{color:var(--text)}
 </style>
 </head>
 <body>
@@ -108,6 +128,7 @@ label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
   </div>
   <div class="user-info">
     <span id="user-name"></span>
+    <button class="btn btn-outline btn-sm" onclick="openHelp()">Help</button>
     <button class="btn btn-outline btn-sm" onclick="doLogout()">Logout</button>
   </div>
 </nav>
@@ -231,6 +252,290 @@ async function pollJob(jobId, interval = 1000, max = 30) {
 
 if (authToken) showApp(); // auto-login if token stored
 </script>
+<script>
+function openHelp(section){const o=document.getElementById('help-overlay');o.classList.add('open');if(section)showHelpSection(section);else if(!document.querySelector('.help-section.active'))showHelpSection('overview');}
+function closeHelp(){document.getElementById('help-overlay').classList.remove('open');}
+function showHelpSection(id){document.querySelectorAll('.help-section').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.help-sidebar a').forEach(a=>a.classList.remove('active'));const s=document.getElementById('help-'+id);if(s)s.classList.add('active');const a=document.querySelector('.help-sidebar a[data-section="'+id+'"]');if(a)a.classList.add('active');}
+</script>
+
+<div id="help-overlay" class="help-overlay" onclick="if(event.target===this)closeHelp()">
+<div class="help-modal">
+<button class="help-close" onclick="closeHelp()">&times;</button>
+<div class="help-sidebar">
+<div style="padding:0 20px 16px;font-weight:700;font-size:15px;color:var(--text)">Help</div>
+<a data-section="overview" onclick="showHelpSection('overview')">What is Prompt Registry</a>
+<a data-section="login" onclick="showHelpSection('login')">Logging In</a>
+<a data-section="roles" onclick="showHelpSection('roles')">User Roles</a>
+<a data-section="create" onclick="showHelpSection('create')">Creating a New Prompt</a>
+<a data-section="import" onclick="showHelpSection('import')">Importing a Prompt</a>
+<a data-section="compliance" onclick="showHelpSection('compliance')">Running Compliance</a>
+<a data-section="activate" onclick="showHelpSection('activate')">Activating a Prompt</a>
+<a data-section="gold" onclick="showHelpSection('gold')">Gold Standard Score</a>
+<a data-section="dimensions" onclick="showHelpSection('dimensions')">Scoring Dimensions</a>
+<a data-section="defects" onclick="showHelpSection('defects')">Defects &amp; Corrections</a>
+<a data-section="auditlog" onclick="showHelpSection('auditlog')">Audit Log</a>
+<a data-section="injection" onclick="showHelpSection('injection')">Injection Detection</a>
+<a data-section="faq" onclick="showHelpSection('faq')">FAQ</a>
+</div>
+<div class="help-content">
+
+<div id="help-overview" class="help-section active">
+<h2>What is Prompt Registry</h2>
+<p>Prompt Registry is a governance platform for managing AI prompts in regulated financial services. It ensures every prompt used in production meets regulatory, security, and quality standards before activation.</p>
+<h3>MVP Journey 1 &mdash; New Prompt</h3>
+<p>An Author creates a new prompt using the Generator. The system runs a compliance check against 17 scoring dimensions across four frameworks (Regulatory, OWASP LLM Top 10, NIST AI RMF, and ISO 42001). Defects are flagged, the Author corrects them, an Approver reviews and activates the prompt. Every action is audit-logged.</p>
+<h3>MVP Journey 2 &mdash; Import &amp; Upgrade</h3>
+<p>An Author pastes an existing prompt into the Import view. The system analyses it against all scoring dimensions, produces findings and actionable suggestions. The Author accepts, rejects, or modifies each suggestion individually. Once all suggestions are responded to, the system generates an upgraded version and queues a compliance check. The Approver then reviews and activates.</p>
+</div>
+
+<div id="help-login" class="help-section">
+<h2>Logging In</h2>
+<p>Prompt Registry uses JWT (JSON Web Token) authentication. When you log in, the server issues a signed token that is stored in your browser's local storage.</p>
+<ul>
+<li><strong>Session expiry:</strong> Tokens expire after 60 minutes. After expiry, you will be redirected to the login screen automatically.</li>
+<li><strong>Security:</strong> Do not share your credentials or token with anyone. Each action you take is logged against your user identity.</li>
+<li><strong>Default admin account:</strong> <code>admin@promptregistry.local</code> / <code>ChangeMe123!</code> &mdash; change this password immediately in production.</li>
+</ul>
+<p>If you see "Session expired", simply log in again. Your work-in-progress is not lost &mdash; prompts and proposals are persisted server-side.</p>
+</div>
+
+<div id="help-roles" class="help-section">
+<h2>User Roles</h2>
+<table class="dim-table">
+<thead><tr><th>Role</th><th>Permissions</th></tr></thead>
+<tbody>
+<tr><td><strong>Author</strong></td><td>Create prompts, create versions, submit for compliance, respond to upgrade suggestions, request activation</td></tr>
+<tr><td><strong>Approver</strong></td><td>Everything Author can do, plus: activate/deactivate prompt versions, approve compliance results, sign off on high-risk prompts</td></tr>
+<tr><td><strong>Auditor</strong></td><td>Read-only access to all prompts, versions, compliance results, and the full audit log. Cannot create or modify.</td></tr>
+<tr><td><strong>Admin</strong></td><td>Full access including user management and scoring dimension configuration</td></tr>
+<tr><td><strong>SuperAdmin</strong></td><td>Admin plus system-level operations (seed data, trigger management, database maintenance)</td></tr>
+</tbody>
+</table>
+<p>Role assignments are managed by Admin users. In the MVP, the seeded admin account has SuperAdmin privileges.</p>
+</div>
+
+<div id="help-create" class="help-section">
+<h2>Creating a New Prompt</h2>
+<p>Follow these seven steps to create a compliant prompt:</p>
+<ol>
+<li><strong>Open the Generator</strong> &mdash; click "Generator" in the nav bar or "New Prompt" on the Dashboard.</li>
+<li><strong>Fill in metadata</strong> &mdash; title, prompt type (e.g. Summarisation, Governance), deployment target, input/output types, and risk tier.</li>
+<li><strong>Write the prompt text</strong> &mdash; this is the actual system prompt that will be sent to the AI model. Include all instructions, constraints, and output formatting.</li>
+<li><strong>Set review cadence</strong> &mdash; how often (in days) this prompt should be reassessed. Default is 365 days.</li>
+<li><strong>Submit</strong> &mdash; the system creates the prompt in Draft status with version 1. If auto-compliance is checked, a compliance check runs immediately.</li>
+<li><strong>Review compliance results</strong> &mdash; check the gold standard score, fix any blocking defects by creating new versions with corrected prompt text.</li>
+<li><strong>Request activation</strong> &mdash; once all blocking defects are resolved, activate the version to move the prompt from Draft to Active.</li>
+</ol>
+</div>
+
+<div id="help-import" class="help-section">
+<h2>Importing an Existing Prompt</h2>
+<p>The Import &amp; Upgrade workflow follows the <strong>suggestion-first rule</strong>: the system never silently rewrites your prompt. Every change is proposed as a suggestion that you must explicitly accept, reject, or modify.</p>
+<ol>
+<li><strong>Paste your prompt</strong> &mdash; open the Import view and paste the existing prompt text into the text area.</li>
+<li><strong>Submit for analysis</strong> &mdash; the system runs an injection scan, then calls the AI to classify the prompt and score it against all 17 dimensions.</li>
+<li><strong>Review findings</strong> &mdash; each finding shows the dimension, current score, severity, and specific gap identified.</li>
+<li><strong>Respond to each suggestion</strong> &mdash; for every suggestion, click Accept (use suggested text as-is), Reject (skip this change), or Modify (edit the suggested text). Each response is audit-logged immediately.</li>
+<li><strong>Apply the upgrade</strong> &mdash; once all suggestions are responded to, click Apply. The system builds the improved prompt from your accepted/modified text and creates a new version. A compliance check is queued automatically.</li>
+<li><strong>Or abandon</strong> &mdash; if you decide not to proceed, click Abandon with a reason. The proposal is closed and the reason is audit-logged.</li>
+</ol>
+<p>The Apply button is disabled until every suggestion has a response. Attempting to apply with missing responses returns HTTP 422.</p>
+</div>
+
+<div id="help-compliance" class="help-section">
+<h2>Running a Compliance Check</h2>
+<p>A compliance check scores a specific prompt version against all 17 active scoring dimensions using the Claude AI model.</p>
+<h3>How it works</h3>
+<ul>
+<li>The system assembles a dynamic scoring prompt from active <code>ScoringDimension</code> records at runtime &mdash; never hardcoded.</li>
+<li><strong>Call 1 (Scoring):</strong> Claude scores the prompt text against each dimension on a 1&ndash;5 scale.</li>
+<li><strong>Call 2 (Anomaly Detection):</strong> A second Claude call validates the scoring output for signs of prompt injection compromise (unexpected persona, inflated scores, missing sections).</li>
+<li>The job runs asynchronously. You receive a job ID immediately and can poll for the result.</li>
+</ul>
+<h3>Cached results</h3>
+<p>Results are cached per version. If you request a check on a version that already has a valid cached result, the cached result is returned instantly without calling Claude. Use <code>force_refresh</code> to bypass the cache.</p>
+<h3>High-risk sign-off</h3>
+<p>Prompts with risk tier <strong>High</strong> or <strong>Prohibited</strong> require additional scrutiny. Any blocking defect (REGULATORY dimension scoring 1 or 2) prevents the prompt from being activated until the defect is resolved in a new version.</p>
+</div>
+
+<div id="help-activate" class="help-section">
+<h2>Activating a Prompt</h2>
+<p>Activation marks a specific version as the production version of a prompt. Four prerequisites must be met:</p>
+<ol>
+<li><strong>No blocking defects</strong> &mdash; all REGULATORY dimensions must score 3 or above (above the blocking threshold of 2). Versions with any REGULATORY score of 1 or 2 cannot be activated.</li>
+<li><strong>Compliance check completed</strong> &mdash; the version must have a completed compliance check. You cannot activate an unchecked version.</li>
+<li><strong>Approver cannot be the Author</strong> &mdash; the person activating (approving) the version should not be the same person who created it. This enforces the four-eyes principle required by financial regulators.</li>
+<li><strong>Prompt not Retired</strong> &mdash; retired prompts cannot have versions activated. The prompt must be in Draft, Active, Review Required, or Suspended status.</li>
+</ol>
+<p>When a version is activated, any previously active version for that prompt is automatically deactivated. Only one version can be active at a time. If the prompt was in Draft status, activation moves it to Active.</p>
+</div>
+
+<div id="help-gold" class="help-section">
+<h2>Gold Standard Score</h2>
+<p>The gold standard score is a weighted composite of all four framework scores, expressed on a 0&ndash;100 scale.</p>
+<h3>Framework weights</h3>
+<table class="dim-table">
+<thead><tr><th>Framework</th><th>Weight</th><th>Dimensions</th></tr></thead>
+<tbody>
+<tr><td>REGULATORY</td><td><strong>40%</strong></td><td>6 dimensions (REG_D1&ndash;REG_D6)</td></tr>
+<tr><td>OWASP LLM Top 10</td><td><strong>30%</strong></td><td>5 dimensions (OWASP_LLM01&ndash;LLM09)</td></tr>
+<tr><td>NIST AI RMF</td><td><strong>20%</strong></td><td>4 dimensions (NIST_GOVERN_1&ndash;MANAGE_1)</td></tr>
+<tr><td>ISO 42001</td><td><strong>10%</strong></td><td>2 dimensions (ISO42001_6_1, ISO42001_8_4)</td></tr>
+</tbody>
+</table>
+<h3>Calculation</h3>
+<p>Each framework's average dimension score (1&ndash;5) is normalised to 0&ndash;1, multiplied by its weight, and summed. The result is scaled to 0&ndash;100.</p>
+<h3>Grade scale</h3>
+<table class="dim-table">
+<thead><tr><th>Grade</th><th>Score range</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><strong>A</strong></td><td>90&ndash;100</td><td>Excellent &mdash; meets or exceeds all standards</td></tr>
+<tr><td><strong>B</strong></td><td>75&ndash;89</td><td>Good &mdash; minor advisory gaps only</td></tr>
+<tr><td><strong>C</strong></td><td>60&ndash;74</td><td>Adequate &mdash; some improvement needed</td></tr>
+<tr><td><strong>D</strong></td><td>40&ndash;59</td><td>Below standard &mdash; significant gaps</td></tr>
+<tr><td><strong>F</strong></td><td>0&ndash;39</td><td>Failing &mdash; critical gaps, likely blocked</td></tr>
+</tbody>
+</table>
+</div>
+
+<div id="help-dimensions" class="help-section">
+<h2>Scoring Dimensions</h2>
+<p>All 17 dimensions scored on a 1&ndash;5 scale. Score 5 = full compliance, Score 1 = critical gap.</p>
+<h3>REGULATORY (6 dimensions &mdash; Blocking)</h3>
+<table class="dim-table">
+<thead><tr><th>Code</th><th>Name</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td><code>REG_D1</code></td><td>Human Oversight</td><td>EU AI Act Art 14 / FINMA</td></tr>
+<tr><td><code>REG_D2</code></td><td>Transparency</td><td>EU AI Act Art 13 / FCA Consumer Duty</td></tr>
+<tr><td><code>REG_D3</code></td><td>Data Minimisation</td><td>nDSG Art 6 / GDPR Art 5</td></tr>
+<tr><td><code>REG_D4</code></td><td>Audit Trail</td><td>FINMA Circ 2023/1 / MAS TRM</td></tr>
+<tr><td><code>REG_D5</code></td><td>Operational Resilience</td><td>FINMA Circ 2023/1 / FCA PS21/3</td></tr>
+<tr><td><code>REG_D6</code></td><td>Outsourcing Controls</td><td>FINMA Circ 2018/3 / MAS Notice 655</td></tr>
+</tbody>
+</table>
+<p>REGULATORY dimensions are <strong>mandatory and blocking</strong>. Any score of 1 or 2 prevents activation.</p>
+<h3>OWASP LLM Top 10 (5 dimensions &mdash; Advisory)</h3>
+<table class="dim-table">
+<thead><tr><th>Code</th><th>Name</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td><code>OWASP_LLM01</code></td><td>Prompt Injection Resistance</td><td>LLM01:2025</td></tr>
+<tr><td><code>OWASP_LLM02</code></td><td>Sensitive Info Disclosure</td><td>LLM02:2025</td></tr>
+<tr><td><code>OWASP_LLM06</code></td><td>Excessive Agency</td><td>LLM06:2025</td></tr>
+<tr><td><code>OWASP_LLM08</code></td><td>Overreliance</td><td>LLM08:2025</td></tr>
+<tr><td><code>OWASP_LLM09</code></td><td>Misinformation</td><td>LLM09:2025</td></tr>
+</tbody>
+</table>
+<h3>NIST AI RMF (4 dimensions &mdash; Maturity)</h3>
+<table class="dim-table">
+<thead><tr><th>Code</th><th>Name</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td><code>NIST_GOVERN_1</code></td><td>Governance Accountability</td><td>NIST AI RMF Govern 1.1</td></tr>
+<tr><td><code>NIST_MAP_1</code></td><td>Context &amp; Limitations</td><td>NIST AI RMF Map 1.1</td></tr>
+<tr><td><code>NIST_MEASURE_1</code></td><td>Output Quality Measurement</td><td>NIST AI RMF Measure 2.5</td></tr>
+<tr><td><code>NIST_MANAGE_1</code></td><td>Decommission Trigger</td><td>NIST AI RMF Manage 1.3</td></tr>
+</tbody>
+</table>
+<h3>ISO 42001 (2 dimensions &mdash; Alignment)</h3>
+<table class="dim-table">
+<thead><tr><th>Code</th><th>Name</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td><code>ISO42001_6_1</code></td><td>Risk Assessment</td><td>ISO 42001 Clause 6.1</td></tr>
+<tr><td><code>ISO42001_8_4</code></td><td>Data Quality &amp; Bias</td><td>ISO 42001 Clause 8.4</td></tr>
+</tbody>
+</table>
+</div>
+
+<div id="help-defects" class="help-section">
+<h2>Defects and Corrections</h2>
+<h3>Severity levels</h3>
+<table class="dim-table">
+<thead><tr><th>Severity</th><th>Impact</th><th>Action required</th></tr></thead>
+<tbody>
+<tr><td><span class="badge badge-red">Blocking</span></td><td>REGULATORY dimension scored 1 or 2</td><td>Must be fixed before activation. Create a new version addressing the gap.</td></tr>
+<tr><td><span class="badge badge-amber">Warning</span></td><td>Any dimension scored 3</td><td>Advisory. Prompt can be activated but improvement is recommended.</td></tr>
+<tr><td><span class="badge badge-blue">Advisory</span></td><td>OWASP/NIST/ISO dimension below 4</td><td>Best practice. Does not block activation.</td></tr>
+</tbody>
+</table>
+<h3>How to correct a defect</h3>
+<ol>
+<li>Open the prompt in the Detail view and review the compliance scores.</li>
+<li>Identify the dimension(s) with low scores and read the rationale.</li>
+<li>Create a new version with corrected prompt text addressing each gap.</li>
+<li>Run a new compliance check on the new version.</li>
+<li>Once all blocking defects are resolved, activate the version.</li>
+</ol>
+<p>Every defect, correction, and version change is immutably logged in the audit trail.</p>
+</div>
+
+<div id="help-auditlog" class="help-section">
+<h2>Audit Log</h2>
+<p>The audit log records every significant action in the system. It is <strong>immutable</strong> &mdash; database triggers prevent deletion or modification of audit records.</p>
+<h3>What is logged</h3>
+<table class="dim-table">
+<thead><tr><th>Action</th><th>When</th></tr></thead>
+<tbody>
+<tr><td><code>Created</code></td><td>New prompt or version created</td></tr>
+<tr><td><code>Edited</code></td><td>Prompt metadata updated or new version added</td></tr>
+<tr><td><code>Activated</code></td><td>Prompt status changed to Active</td></tr>
+<tr><td><code>Approved</code></td><td>Version activated (approved for production use)</td></tr>
+<tr><td><code>Retired</code></td><td>Prompt status changed to Retired</td></tr>
+<tr><td><code>ComplianceChecked</code></td><td>Compliance check completed</td></tr>
+<tr><td><code>PromptImported</code></td><td>Prompt text submitted for import analysis</td></tr>
+<tr><td><code>UpgradeProposed</code></td><td>AI analysis completed, findings and suggestions stored</td></tr>
+<tr><td><code>UpgradeResponseRecorded</code></td><td>User responded to a suggestion (one entry per click)</td></tr>
+<tr><td><code>UpgradeApplied</code></td><td>Improved version generated from accepted suggestions</td></tr>
+<tr><td><code>UpgradeAbandoned</code></td><td>Upgrade proposal abandoned with reason</td></tr>
+<tr><td><code>InjectionDetected</code></td><td>Injection scan found critical patterns in submitted text</td></tr>
+<tr><td><code>ClassificationOverridden</code></td><td>User corrected AI-inferred classification</td></tr>
+</tbody>
+</table>
+<h3>Regulatory use</h3>
+<p>The audit log is designed to satisfy FINMA Circular 2023/1 and MAS TRM requirements for AI governance traceability. Every record includes a timestamp (set by the database, not the application), user ID, entity reference, and action detail in JSON format. Auditors have read-only access to the full log.</p>
+</div>
+
+<div id="help-injection" class="help-section">
+<h2>Injection Detection</h2>
+<p>The injection scanner protects the system by checking all user-submitted text against a database of known attack patterns before it is processed or sent to Claude.</p>
+<h3>How it works</h3>
+<ul>
+<li>Patterns are loaded from the <code>injection_patterns</code> table and cached for 60 seconds.</li>
+<li>Three match types: <strong>substring</strong> (case-insensitive), <strong>regex</strong> (pattern matching), and <strong>unicode_range</strong> (hidden character detection).</li>
+<li>23 patterns across 6 categories: Instruction override, Persona hijack, Exfiltration, Delimiter attack, Unicode manipulation, and Structural anomaly.</li>
+</ul>
+<h3>Result tiers</h3>
+<table class="dim-table">
+<thead><tr><th>Result</th><th>Severity</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><span class="badge badge-green">Clean</span></td><td>None</td><td>Text is wrapped in delimiter tags and processed normally.</td></tr>
+<tr><td><span class="badge badge-amber">Suspicious</span></td><td>Medium or High</td><td>Text is wrapped, flagged, and processed with caution. Logged for review.</td></tr>
+<tr><td><span class="badge badge-red">Critical</span></td><td>Critical</td><td>Text is <strong>quarantined</strong>. Not sent to Claude. Logged as <code>InjectionDetected</code>. Analysis stops.</td></tr>
+</tbody>
+</table>
+<p>The highest-severity match determines the overall result. Critical always wins over High, which wins over Medium.</p>
+</div>
+
+<div id="help-faq" class="help-section">
+<h2>Frequently Asked Questions</h2>
+<h3>1. Can I edit a prompt version after it's created?</h3>
+<p>No. Prompt versions are <strong>immutable</strong> by design &mdash; enforced by database triggers. To make changes, create a new version. This ensures a complete audit trail of every iteration.</p>
+<h3>2. What happens if the compliance check fails?</h3>
+<p>A "Fail" result means one or more REGULATORY dimensions scored 1 or 2 (blocking defects). The prompt cannot be activated until you create a corrected version that scores 3 or above on all regulatory dimensions.</p>
+<h3>3. How long does a compliance check take?</h3>
+<p>Typically 10&ndash;30 seconds. The check makes two Claude API calls (scoring + anomaly detection). Results are cached per version, so subsequent checks on the same version return instantly.</p>
+<h3>4. Can I use force_refresh to bypass the cache?</h3>
+<p>Yes. Set <code>force_refresh: true</code> when submitting a compliance check to ignore the cache and re-score. This is useful after scoring dimensions have been updated.</p>
+<h3>5. Why can't I activate a version?</h3>
+<p>Check: (a) no blocking defects remain, (b) a compliance check has completed, (c) the prompt is not Retired, and (d) ideally the approver is a different person from the author.</p>
+<h3>6. What does "Pass with warnings" mean?</h3>
+<p>The prompt has no blocking defects (all REGULATORY scores are 3+), but one or more dimensions across any framework scored below 4. The prompt can be activated, but improvement is recommended.</p>
+<h3>7. How do I add or modify scoring dimensions?</h3>
+<p>Scoring dimensions are managed in the <code>scoring_dimensions</code> database table. Admin users can update dimension descriptions, criteria, or active status. Changes take effect on the next compliance check. Cached results for existing versions are not automatically invalidated &mdash; use force_refresh to re-score.</p>
+</div>
+
+</div>
+</div>
+</div>
+
 <script src="/static/views/dashboard.js"></script>
 <script src="/static/views/detail.js"></script>
 <script src="/static/views/generator.js"></script>
