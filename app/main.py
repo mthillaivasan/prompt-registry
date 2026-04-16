@@ -22,10 +22,6 @@ finally:
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(title="Prompt Registry", version="0.1.0")
-app.include_router(router)
-app.include_router(compliance_router)
-app.include_router(upgrade_router)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/", response_class=FileResponse)
@@ -36,3 +32,10 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+app.include_router(router)
+app.include_router(compliance_router)
+app.include_router(upgrade_router)
+# Mount static files last so it doesn't shadow API routes
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
