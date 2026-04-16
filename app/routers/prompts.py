@@ -214,19 +214,47 @@ def update_prompt(
 
 # ── Generate prompt text via Claude ──────────────────────────────────────────
 
-_GENERATE_SYSTEM_PROMPT = """\
+_GENERATE_SYSTEM_PROMPT_TEMPLATE = """\
 You are an expert prompt engineer for regulated financial services. \
 Generate a production-ready system prompt based on the brief below. \
-The prompt must include all of the following guardrails:
-- Explicit human oversight instruction with override authority
-- Clear statement that output is advisory and AI-generated
-- Delimiter wrapping around all user-supplied inputs using <INPUT> tags
-- Instruction not to fabricate regulatory references
-- Defined output scope
-- Audit trail instruction — reasoning documented separately from conclusions
+The prompt must include guardrail instructions for EACH of the \
+following dimensions — and ONLY these dimensions. Do not add \
+guardrails for dimensions not listed.
+
+REQUIRED GUARDRAIL DIMENSIONS:
+{guardrail_block}
+
 Write the prompt in second person addressing the AI model. \
 End with a section titled TONE AND BEHAVIOUR RULES containing all guardrails.
 Return only the prompt text — no explanation, no preamble."""
+
+
+def _resolve_guardrails(body, db) -> list:
+    """Determine which dimensions to include in the generated prompt."""
+    from app.routers.compliance import _check_tier2_trigger
+    dims = (
+        db.query(ScoringDimension)
+        .filter(ScoringDimension.is_active == True)  # noqa: E712
+        .order_by(ScoringDimension.sort_order)
+        .all()
+    )
+
+    if body.selected_guardrails:
+        codes = set(body.selected_guardrails)
+        return [d for d in dims if d.code in codes]
+
+    # Auto-detect: tier1 always + triggered tier2 + all tier3
+    selected = []
+    for d in dims:
+        if d.tier == 1:
+            selected.append(d)
+        elif d.tier == 2:
+            reason = _check_tier2_trigger(d, body.deployment_target, body.input_type, "", body.brief_text)
+            if reason:
+                selected.append(d)
+        else:
+            selected.append(d)
+    return selected
 
 
 @router.post("/generate", response_model=GenerateResponse)
@@ -237,7 +265,6 @@ def generate_prompt_text(
 ):
     from services.injection_scanner import scan as injection_scan
 
-    # Injection scan on brief_text
     if body.brief_text:
         scan_result = injection_scan("brief_text", body.brief_text, db)
         if scan_result["result"] == "critical":
@@ -253,6 +280,12 @@ def generate_prompt_text(
                 status_code=400,
                 detail=f"Injection detected in brief text: {scan_result['message']}",
             )
+
+    selected_dims = _resolve_guardrails(body, db)
+    guardrail_block = "\n".join(
+        f"- {d.code} ({d.name}): {d.description}" for d in selected_dims
+    )
+    system_prompt = _GENERATE_SYSTEM_PROMPT_TEMPLATE.replace("{guardrail_block}", guardrail_block)
 
     brief_parts = [f"Title: {body.title}", f"Prompt type: {body.prompt_type}"]
     if body.deployment_target:
@@ -271,7 +304,7 @@ def generate_prompt_text(
         response = client.messages.create(
             model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
             max_tokens=4096,
-            system=_GENERATE_SYSTEM_PROMPT,
+            system=system_prompt,
             messages=[{"role": "user", "content": user_message}],
         )
         generated = response.content[0].text.strip()
@@ -287,6 +320,7 @@ def generate_prompt_text(
             detail=json.dumps({
                 "title": body.title,
                 "prompt_type": body.prompt_type,
+                "selected_guardrails": [d.code for d in selected_dims],
                 "generated_length": len(generated),
             }),
         ))

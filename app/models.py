@@ -63,6 +63,8 @@ class ScoringDimension(Base):
     scoring_type = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
+    tier = Column(Integer, nullable=False, default=3)  # 1=always, 2=conditional, 3=optional
+    tier2_trigger = Column(Text, nullable=True)  # JSON: condition description for tier 2
 
     __table_args__ = (
         CheckConstraint(
@@ -72,6 +74,10 @@ class ScoringDimension(Base):
         CheckConstraint(
             "scoring_type IN ('Blocking','Advisory','Maturity','Alignment')",
             name="ck_sd_scoring_type",
+        ),
+        CheckConstraint(
+            "tier IN (1, 2, 3)",
+            name="ck_sd_tier",
         ),
     )
 

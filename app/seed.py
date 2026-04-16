@@ -37,6 +37,7 @@ _DIMENSIONS = [
         score_1_criteria="No human oversight requirement stated. AI output may be used without human review. Blocking defect.",
         is_mandatory=True, blocking_threshold=2, scoring_type="Blocking",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=10,
+        tier=1, tier2_trigger=None,
     ),
     dict(
         code="REG_D2", name="Transparency",
@@ -48,6 +49,7 @@ _DIMENSIONS = [
         score_1_criteria="No transparency requirement. Output could be mistaken for human-produced authoritative content. Blocking defect.",
         is_mandatory=True, blocking_threshold=2, scoring_type="Blocking",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=20,
+        tier=2, tier2_trigger="Output visible externally OR deployment_target contains Agent",
     ),
     dict(
         code="REG_D3", name="Data Minimisation",
@@ -59,6 +61,7 @@ _DIMENSIONS = [
         score_1_criteria="No data minimisation controls. Personal data may be processed without declared purpose or legal basis. Blocking defect.",
         is_mandatory=True, blocking_threshold=2, scoring_type="Blocking",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=30,
+        tier=2, tier2_trigger="Input type contains personal data OR prompt text contains personal/client data",
     ),
     dict(
         code="REG_D4", name="Audit Trail",
@@ -70,6 +73,7 @@ _DIMENSIONS = [
         score_1_criteria="No audit trail requirement. Output not traceable or accountable. Blocking defect.",
         is_mandatory=True, blocking_threshold=2, scoring_type="Blocking",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=40,
+        tier=1, tier2_trigger=None,
     ),
     dict(
         code="REG_D5", name="Operational Resilience",
@@ -81,6 +85,7 @@ _DIMENSIONS = [
         score_1_criteria="No failure or fallback handling. Prompt creates single point of failure in critical process. Blocking defect.",
         is_mandatory=True, blocking_threshold=2, scoring_type="Blocking",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=50,
+        tier=2, tier2_trigger="Risk tier is High OR prompt text contains critical",
     ),
     dict(
         code="REG_D6", name="Outsourcing Controls",
@@ -94,6 +99,7 @@ _DIMENSIONS = [
         applies_to_types="[]",
         applies_if='{"deployment_target":["MS Copilot Agent Declarative","MS Copilot Agent Custom Engine","OpenAI","Multi-model"]}',
         is_active=True, sort_order=60,
+        tier=2, tier2_trigger="Deployment target is not Internal or Claude",
     ),
     # ── OWASP LLM Top 10 — Advisory ──────────────────────────────────────────
     dict(
@@ -106,6 +112,7 @@ _DIMENSIONS = [
         score_1_criteria="No injection resistance. User content not isolated. AI may follow injected instructions.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Advisory",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=110,
+        tier=2, tier2_trigger="Input type includes user-supplied free text or form responses",
     ),
     dict(
         code="OWASP_LLM02", name="Sensitive Information Disclosure",
@@ -117,6 +124,7 @@ _DIMENSIONS = [
         score_1_criteria="No instruction preventing system prompt reproduction or configuration leakage.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Advisory",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=120,
+        tier=3, tier2_trigger=None,
     ),
     dict(
         code="OWASP_LLM06", name="Excessive Agency",
@@ -128,6 +136,7 @@ _DIMENSIONS = [
         score_1_criteria="No scope limitation. AI may initiate downstream actions or produce instructions that trigger other systems.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Advisory",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=130,
+        tier=2, tier2_trigger="Deployment target contains Agent or Automation",
     ),
     dict(
         code="OWASP_LLM08", name="Overreliance",
@@ -139,6 +148,7 @@ _DIMENSIONS = [
         score_1_criteria="Output presented as authoritative. No advisory qualification or human review requirement.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Advisory",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=140,
+        tier=1, tier2_trigger=None,
     ),
     dict(
         code="OWASP_LLM09", name="Misinformation",
@@ -150,6 +160,7 @@ _DIMENSIONS = [
         score_1_criteria="No instruction against fabrication. AI may produce false regulatory references presented as fact.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Advisory",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=150,
+        tier=1, tier2_trigger=None,
     ),
     # ── NIST AI RMF — Maturity ────────────────────────────────────────────────
     dict(
@@ -162,6 +173,7 @@ _DIMENSIONS = [
         score_1_criteria="No named owner or approver. Accountability chain absent.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Maturity",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=210,
+        tier=3, tier2_trigger=None,
     ),
     dict(
         code="NIST_MAP_1", name="Context and Limitations",
@@ -173,6 +185,7 @@ _DIMENSIONS = [
         score_1_criteria="No context, user base, or limitation declarations present.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Maturity",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=220,
+        tier=3, tier2_trigger=None,
     ),
     dict(
         code="NIST_MEASURE_1", name="Output Quality Measurement",
@@ -195,6 +208,7 @@ _DIMENSIONS = [
         score_1_criteria="No decommission or review trigger. Prompt may be used indefinitely without reassessment.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Maturity",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=240,
+        tier=3, tier2_trigger=None,
     ),
     # ── ISO 42001 — Alignment ─────────────────────────────────────────────────
     dict(
@@ -207,6 +221,7 @@ _DIMENSIONS = [
         score_1_criteria="No risk assessment. Prompt deployed without documented risk consideration.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Alignment",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=310,
+        tier=3, tier2_trigger=None,
     ),
     dict(
         code="ISO42001_8_4", name="Data Quality and Bias",
@@ -218,6 +233,7 @@ _DIMENSIONS = [
         score_1_criteria="No data source, quality, or bias documentation.",
         is_mandatory=False, blocking_threshold=2, scoring_type="Alignment",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=320,
+        tier=3, tier2_trigger=None,
     ),
 ]
 

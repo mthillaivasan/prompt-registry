@@ -105,6 +105,7 @@ class GenerateRequest(BaseModel):
     input_type: str = ""
     output_type: str = ""
     brief_text: str = ""
+    selected_guardrails: list[str] | None = None  # dimension codes; None = auto-detect
 
 
 class GenerateResponse(BaseModel):
