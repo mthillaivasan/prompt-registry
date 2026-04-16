@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Registry</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#242838;--border:#2e3348;
+  --text:#e1e4ed;--text2:#8b90a0;--accent:#6c8aff;--accent2:#4a6aff;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+
+/* Nav */
+nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;height:56px;position:sticky;top:0;z-index:100}
+nav .logo{font-weight:700;font-size:16px;margin-right:32px;color:var(--text)}
+nav .nav-links{display:flex;gap:4px}
+nav .nav-links a{padding:8px 16px;border-radius:6px;font-size:14px;color:var(--text2);transition:all .15s}
+nav .nav-links a:hover{color:var(--text);background:var(--surface2)}
+nav .nav-links a.active{color:var(--accent);background:rgba(108,138,255,.12)}
+
+/* Layout */
+.container{max-width:1200px;margin:0 auto;padding:24px}
+.view{display:none}
+.view.active{display:block}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.card-title{font-size:16px;font-weight:600}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600}
+.badge-green{background:rgba(52,211,153,.15);color:var(--green)}
+.badge-red{background:rgba(248,113,113,.15);color:var(--red)}
+.badge-amber{background:rgba(251,191,36,.15);color:var(--amber)}
+.badge-purple{background:rgba(167,139,250,.15);color:var(--purple)}
+.badge-blue{background:rgba(108,138,255,.15);color:var(--accent)}
+
+/* Grade circle */
+.grade{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;font-size:14px;font-weight:700;border:3px solid}
+.grade-high{border-color:var(--green);color:var(--green)}
+.grade-mid{border-color:var(--amber);color:var(--amber)}
+.grade-low{border-color:var(--red);color:var(--red)}
+.grade-none{border-color:var(--border);color:var(--text2)}
+
+/* Tables */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px}
+tr:hover td{background:var(--surface2)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:14px;font-weight:500;border:none;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-success{background:var(--green);color:#000}
+.btn-danger{background:var(--red);color:#fff}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Forms */
+input,textarea,select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-size:14px;width:100%;font-family:inherit}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+textarea{resize:vertical;min-height:120px}
+label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
+.form-group{margin-bottom:16px}
+
+/* Collapsible */
+.collapsible-header{cursor:pointer;display:flex;align-items:center;gap:8px;padding:12px 0;user-select:none}
+.collapsible-header::before{content:'\25B6';font-size:10px;transition:transform .2s}
+.collapsible-header.open::before{transform:rotate(90deg)}
+.collapsible-body{display:none;padding:0 0 12px 18px}
+.collapsible-body.open{display:block}
+
+/* Scores bar */
+.score-bar{display:flex;align-items:center;gap:8px;margin:4px 0}
+.score-bar-track{flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:3px;transition:width .3s}
+.score-1 .score-bar-fill{width:20%;background:var(--red)}
+.score-2 .score-bar-fill{width:40%;background:var(--red)}
+.score-3 .score-bar-fill{width:60%;background:var(--amber)}
+.score-4 .score-bar-fill{width:80%;background:var(--green)}
+.score-5 .score-bar-fill{width:100%;background:var(--green)}
+
+/* Diff */
+.diff-add{background:rgba(52,211,153,.1);border-left:3px solid var(--green);padding:4px 8px;margin:2px 0;font-family:monospace;font-size:13px}
+.diff-remove{background:rgba(248,113,113,.1);border-left:3px solid var(--red);padding:4px 8px;margin:2px 0;font-family:monospace;font-size:13px;text-decoration:line-through}
+
+/* Loading */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-state{text-align:center;padding:40px;color:var(--text2)}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 20px;font-size:14px;z-index:200;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+.toast-error{border-color:var(--red)}
+.toast-success{border-color:var(--green)}
+
+/* Pagination */
+.pagination{display:flex;gap:8px;justify-content:center;padding:16px 0}
+
+/* Prompt text display */
+.prompt-text{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:16px;font-family:monospace;font-size:13px;white-space:pre-wrap;max-height:400px;overflow-y:auto}
+
+/* Suggestion card */
+.suggestion-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px}
+.suggestion-actions{display:flex;gap:8px;margin-top:12px}
+
+/* Empty state */
+.empty-state{text-align:center;padding:60px 20px;color:var(--text2)}
+.empty-state h3{margin-bottom:8px;color:var(--text)}
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">Prompt Registry</span>
+  <div class="nav-links">
+    <a href="#dashboard" data-view="dashboard" class="active">Dashboard</a>
+    <a href="#detail" data-view="detail">Prompt Detail</a>
+    <a href="#generator" data-view="generator">Generator</a>
+    <a href="#import" data-view="import">Import &amp; Upgrade</a>
+    <a href="#audit" data-view="audit">Audit Log</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div id="view-dashboard" class="view active"></div>
+  <div id="view-detail" class="view"></div>
+  <div id="view-generator" class="view"></div>
+  <div id="view-import" class="view"></div>
+  <div id="view-audit" class="view"></div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const API = '';
+
+async function api(path, opts = {}) {
+  const url = API + path;
+  const config = { headers: { 'Content-Type': 'application/json' }, ...opts };
+  if (config.body && typeof config.body === 'object') config.body = JSON.stringify(config.body);
+  const res = await fetch(url, config);
+  if (res.status === 204) return null;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show toast-' + type;
+  setTimeout(() => el.className = 'toast', 3000);
+}
+
+function gradeClass(score) {
+  if (score == null) return 'grade-none';
+  if (score >= 70) return 'grade-high';
+  if (score >= 40) return 'grade-mid';
+  return 'grade-low';
+}
+
+function badgeFor(status) {
+  if (!status) return '<span class="badge badge-blue">New</span>';
+  if (status === 'Passed') return '<span class="badge badge-green">Passed</span>';
+  if (status === 'Blocked') return '<span class="badge badge-red">Blocked</span>';
+  return '<span class="badge badge-amber">' + status + '</span>';
+}
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const s = Math.floor((now - d) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return d.toLocaleDateString();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// --- Router ---
+let currentView = 'dashboard';
+const viewInits = {};
+
+function navigate(view, params = {}) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+  const el = document.getElementById('view-' + view);
+  if (el) el.classList.add('active');
+  const link = document.querySelector(`[data-view="${view}"]`);
+  if (link) link.classList.add('active');
+  currentView = view;
+  if (viewInits[view]) viewInits[view](params);
+}
+
+document.querySelectorAll('.nav-links a').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    navigate(a.dataset.view);
+  });
+});
+
+// --- Poll helper ---
+async function pollJob(jobId, interval = 1000, maxAttempts = 30) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const job = await api('/compliance-jobs/' + jobId);
+    if (job.status === 'Complete' || job.status === 'Failed') return job;
+    await new Promise(r => setTimeout(r, interval));
+  }
+  throw new Error('Job polling timed out');
+}
+</script>
+<script src="/static/views/dashboard.js"></script>
+<script src="/static/views/detail.js"></script>
+<script src="/static/views/generator.js"></script>
+<script src="/static/views/import.js"></script>
+<script src="/static/views/audit.js"></script>
+<script>navigate('dashboard');</script>
+</body>
+</html>

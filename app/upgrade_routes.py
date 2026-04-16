@@ -291,3 +291,31 @@ def get_timeline(prompt_id: int, db: Session = Depends(get_db)):
         ))
 
     return timeline
+
+
+# --- GET /audit-log ---
+
+@router.get("/audit-log")
+def list_audit_log(
+    skip: int = 0,
+    limit: int = 50,
+    action: str | None = None,
+    db: Session = Depends(get_db),
+):
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
+    if action:
+        stmt = stmt.where(AuditLog.action == action)
+    stmt = stmt.offset(skip).limit(limit)
+    entries = list(db.scalars(stmt).all())
+    return [
+        {
+            "id": e.id,
+            "action": e.action,
+            "entity_type": e.entity_type,
+            "entity_id": e.entity_id,
+            "actor": e.actor,
+            "detail": e.detail,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in entries
+    ]
