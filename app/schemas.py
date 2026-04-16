@@ -101,9 +101,10 @@ class VersionCreate(BaseModel):
 class GenerateRequest(BaseModel):
     title: str = Field(min_length=1)
     prompt_type: PromptType
+    deployment_target: str = ""
     input_type: str = ""
     output_type: str = ""
-    existing_text: str = ""
+    brief_text: str = ""
 
 
 class GenerateResponse(BaseModel):

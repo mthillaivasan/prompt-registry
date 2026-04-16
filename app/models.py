@@ -309,7 +309,7 @@ class AuditLog(Base):
             "'Approved','DefectLogged','Corrected','InjectionDetected',"
             "'ValidationFailed','Accessed','PromptImported','UpgradeProposed',"
             "'UpgradeResponseRecorded','UpgradeApplied','UpgradeAbandoned',"
-            "'ClassificationOverridden')",
+            "'ClassificationOverridden','PromptGenerated')",
             name="ck_al_action",
         ),
         CheckConstraint(

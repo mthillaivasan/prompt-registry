@@ -128,9 +128,10 @@ async function genAI() {
     const resp = await api('/prompts/generate', { method: 'POST', body: {
       title,
       prompt_type: document.getElementById('gen-type').value,
+      deployment_target: document.getElementById('gen-deploy').value || '',
       input_type: document.getElementById('gen-input').value || '',
       output_type: document.getElementById('gen-output').value || '',
-      existing_text: textarea.value.trim(),
+      brief_text: textarea.value.trim(),
     }});
     textarea.value = resp.prompt_text;
     textarea.style.height = 'auto';
