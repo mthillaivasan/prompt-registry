@@ -94,3 +94,58 @@ class PromptDetail(PromptOut):
 class VersionCreate(BaseModel):
     prompt_text: str = Field(min_length=1)
     change_summary: str | None = None
+
+
+# ── Compliance schemas ───────────────────────────────────────────────────────
+
+class ComplianceCheckRequest(BaseModel):
+    version_id: str
+    force_refresh: bool = False
+
+
+class DimensionScoreOut(BaseModel):
+    code: str
+    score: int
+    rationale: str
+
+
+class AnomalyOut(BaseModel):
+    result: str  # clean / suspicious / compromised
+    confidence: float
+    reason: str
+
+
+class GoldStandardOut(BaseModel):
+    composite: float
+    framework_averages: dict[str, float]
+    scale: str
+
+
+class ComplianceCheckOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    check_id: str
+    version_id: str
+    run_at: str
+    run_by: str
+    overall_result: str | None
+    blocking_defects: int
+    gold_standard: GoldStandardOut | None = None
+    scores: list[DimensionScoreOut] = []
+    anomaly: AnomalyOut | None = None
+    flags: list[dict] = []
+
+
+class ComplianceJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: str
+    version_id: str
+    requested_by: str
+    requested_at: str
+    status: str
+    started_at: str | None
+    completed_at: str | None
+    error_message: str | None
+    force_refresh: bool
+    result: ComplianceCheckOut | None = None
