@@ -21,8 +21,12 @@ viewInits.generator = function () {
         <div class="form-group"><label>Input Type</label><input type="text" id="gen-input" value="Plain text"></div>
         <div class="form-group"><label>Output Type</label><input type="text" id="gen-output" value="Plain text"></div>
       </div>
-      <div class="form-group"><label>Prompt Text</label>
-        <textarea id="gen-text" rows="10" placeholder="Write the full prompt text here..."></textarea>
+      <div class="form-group">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <label style="margin-bottom:0">Prompt Text</label>
+          <button class="btn btn-outline btn-sm" id="gen-ai-btn" onclick="genAI()" title="Generate prompt text using Claude AI based on the title, type, and fields above">Generate with AI</button>
+        </div>
+        <textarea id="gen-text" rows="10" placeholder="Write the full prompt text here, or click Generate with AI to create one from the fields above..."></textarea>
       </div>
       <div class="form-group"><label>Change Summary (optional)</label>
         <input type="text" id="gen-summary" placeholder="e.g. Initial version">
@@ -111,5 +115,30 @@ async function genSubmit() {
     resultEl.innerHTML = '<div class="card" style="border-color:var(--red)"><p style="color:var(--red)">' + esc(e.message) + '</p></div>';
   } finally {
     btn.disabled = false; btn.innerHTML = 'Create Prompt';
+  }
+}
+
+async function genAI() {
+  const title = document.getElementById('gen-title').value.trim();
+  if (!title) { toast('Enter a title first so the AI knows what to generate', 'error'); return; }
+  const btn = document.getElementById('gen-ai-btn');
+  const textarea = document.getElementById('gen-text');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating...';
+  try {
+    const resp = await api('/prompts/generate', { method: 'POST', body: {
+      title,
+      prompt_type: document.getElementById('gen-type').value,
+      input_type: document.getElementById('gen-input').value || '',
+      output_type: document.getElementById('gen-output').value || '',
+      existing_text: textarea.value.trim(),
+    }});
+    textarea.value = resp.prompt_text;
+    textarea.style.height = 'auto';
+    textarea.style.height = textarea.scrollHeight + 'px';
+    toast('Prompt generated — review and edit before saving');
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.innerHTML = 'Generate with AI';
   }
 }

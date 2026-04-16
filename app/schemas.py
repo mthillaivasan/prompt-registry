@@ -96,6 +96,20 @@ class VersionCreate(BaseModel):
     change_summary: str | None = None
 
 
+# ── Generate schema ─────────────────────────────────────────────────────────
+
+class GenerateRequest(BaseModel):
+    title: str = Field(min_length=1)
+    prompt_type: PromptType
+    input_type: str = ""
+    output_type: str = ""
+    existing_text: str = ""
+
+
+class GenerateResponse(BaseModel):
+    prompt_text: str
+
+
 # ── Compliance schemas ───────────────────────────────────────────────────────
 
 class ComplianceCheckRequest(BaseModel):
