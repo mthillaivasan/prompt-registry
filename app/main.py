@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.database import Base, SessionLocal, engine
 from app.routes import router
@@ -15,10 +19,18 @@ try:
 finally:
     db.close()
 
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
 app = FastAPI(title="Prompt Registry", version="0.1.0")
 app.include_router(router)
 app.include_router(compliance_router)
 app.include_router(upgrade_router)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/", response_class=FileResponse)
+def root():
+    return FileResponse(str(STATIC_DIR / "base.html"))
 
 
 @app.get("/health")
