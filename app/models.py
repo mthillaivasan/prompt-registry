@@ -34,6 +34,7 @@ class PromptVersion(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     change_note: Mapped[str] = mapped_column(Text, default="")
+    upgrade_proposal_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
@@ -103,3 +104,57 @@ class ComplianceCheckJob(Base):
 
     result: Mapped["ComplianceResult | None"] = relationship()
     version: Mapped["PromptVersion"] = relationship()
+
+
+def _generate_proposal_id() -> str:
+    return str(uuid.uuid4())
+
+
+class UpgradeProposal(Base):
+    __tablename__ = "upgrade_proposals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    proposal_id: Mapped[str] = mapped_column(String(36), unique=True, default=_generate_proposal_id)
+    prompt_id: Mapped[int | None] = mapped_column(ForeignKey("prompts.id"), nullable=True)
+    source_version_id: Mapped[int | None] = mapped_column(ForeignKey("prompt_versions.id"), nullable=True)
+    proposed_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    proposed_by: Mapped[str] = mapped_column(String(255), default="SYSTEM")
+    status: Mapped[str] = mapped_column(String(30), default="Pending")
+    # Pending / Partially Accepted / Accepted / Rejected / Applied / Abandoned
+    inferred_purpose: Mapped[str] = mapped_column(Text, default="")
+    inferred_prompt_type: Mapped[str] = mapped_column(String(255), default="")
+    inferred_risk_tier: Mapped[str] = mapped_column(String(20), default="")
+    # Minimal / Limited / High / Prohibited
+    classification_confidence: Mapped[str] = mapped_column(String(10), default="")
+    # Low / Medium / High
+    findings_json: Mapped[str] = mapped_column(Text, default="[]")
+    suggestions_json: Mapped[str] = mapped_column(Text, default="[]")
+    user_responses_json: Mapped[str] = mapped_column(Text, default="[]")
+    responses_recorded_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    resulting_version_id: Mapped[int | None] = mapped_column(ForeignKey("prompt_versions.id"), nullable=True)
+    applied_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    applied_by: Mapped[str] = mapped_column(String(255), default="")
+    abandoned_reason: Mapped[str] = mapped_column(Text, default="")
+    # Original prompt text for fresh imports
+    original_prompt_text: Mapped[str] = mapped_column(Text, default="")
+
+    prompt: Mapped["Prompt | None"] = relationship(foreign_keys=[prompt_id])
+    source_version: Mapped["PromptVersion | None"] = relationship(foreign_keys=[source_version_id])
+    resulting_version: Mapped["PromptVersion | None"] = relationship(foreign_keys=[resulting_version_id])
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    # PromptImported / UpgradeProposed / UpgradeResponseRecorded /
+    # ClassificationOverridden / UpgradeApplied / UpgradeAbandoned /
+    # InjectionDetected
+    entity_type: Mapped[str] = mapped_column(String(50), default="")
+    entity_id: Mapped[str] = mapped_column(String(36), default="")
+    actor: Mapped[str] = mapped_column(String(255), default="SYSTEM")
+    detail: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
