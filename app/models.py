@@ -49,6 +49,10 @@ class ScoringDimension(Base):
     code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    scoring_type: Mapped[str] = mapped_column(String(20), nullable=False)  # Blocking/Advisory/Maturity/Alignment
+    is_mandatory: Mapped[bool] = mapped_column(Boolean, default=False)
+    blocking_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score_5_criteria: Mapped[str] = mapped_column(Text, default="")
     weight: Mapped[float] = mapped_column(Float, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime.datetime] = mapped_column(
