@@ -17,6 +17,8 @@ from app.models import (  # noqa: F401 — imports register all models with Base
 )
 from app.routers import auth as auth_router
 from app.routers import health as health_router
+from app.routers import prompts as prompts_router
+from app.routers import versions as versions_router
 from app.seed import run_seed
 from app.triggers import create_triggers_and_indexes
 
@@ -42,3 +44,5 @@ app = FastAPI(
 
 app.include_router(auth_router.router)
 app.include_router(health_router.router)
+app.include_router(prompts_router.router)
+app.include_router(versions_router.router)
