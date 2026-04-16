@@ -24,9 +24,9 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 app = FastAPI(title="Prompt Registry", version="0.1.0")
 
 
-@app.get("/", response_class=FileResponse)
+@app.get("/")
 def root():
-    return FileResponse(str(STATIC_DIR / "base.html"))
+    return FileResponse(path=str(STATIC_DIR / "base.html"), media_type="text/html")
 
 
 @app.get("/health")
