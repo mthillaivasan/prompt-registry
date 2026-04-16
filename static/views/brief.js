@@ -1,7 +1,9 @@
-// Brief Builder — 5-step guided form, purely frontend state
+// Brief Builder — 6-step guided form + review, purely frontend state
 (function () {
+  const TOTAL_STEPS = 6;
   let step = 1;
-  const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [] };
+  const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [] };
+  let guardrailData = null; // cached response from /scoring-dimensions/applicable
 
   const INPUT_OPTIONS = ['Form responses', 'Document or report', 'Data table', 'Email thread', 'Free text', 'Structured data', 'Meeting notes', 'Other'];
   const OUTPUT_OPTIONS = ['Structured assessment', 'Executive summary', 'Briefing note', 'Recommendation', 'Flag report', 'Draft email or communication', 'Data extraction', 'Comparison table', 'Other'];
@@ -18,17 +20,20 @@
 
   viewInits.brief = function () {
     step = 1;
-    state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = ''; state.constraints = [];
+    state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
+    state.constraints = []; state.selectedGuardrails = [];
+    guardrailData = null;
     renderStep();
   };
 
   function renderStep() {
     const el = document.getElementById('view-brief');
-    const progress = `<div style="display:flex;gap:4px;margin-bottom:24px">${[1,2,3,4,5].map(i =>
-      `<div style="flex:1;height:4px;border-radius:2px;background:${i <= step ? 'var(--accent)' : 'var(--surface2)'}"></div>`
-    ).join('')}</div>`;
+    const progress = `<div style="display:flex;gap:4px;margin-bottom:24px">${
+      Array.from({length: TOTAL_STEPS}, (_, i) => i + 1).map(i =>
+        `<div style="flex:1;height:4px;border-radius:2px;background:${i <= step ? 'var(--accent)' : 'var(--surface2)'}"></div>`
+      ).join('')}</div>`;
 
-    let html = '<h2 style="margin-bottom:8px">Brief Builder</h2><p style="color:var(--text2);margin-bottom:20px;font-size:14px">Step ' + step + ' of 5</p>' + progress + '<div class="card">';
+    let html = '<h2 style="margin-bottom:8px">Brief Builder</h2><p style="color:var(--text2);margin-bottom:20px;font-size:14px">Step ' + step + ' of ' + TOTAL_STEPS + '</p>' + progress + '<div class="card">';
 
     if (step === 1) {
       html += `<h3 style="margin-bottom:12px">What does this prompt need to do?</h3>
@@ -74,6 +79,8 @@
         </label>`;
       });
       html += '</div>';
+    } else if (step === 6) {
+      html += renderStep6();
     }
 
     html += '</div>';
@@ -81,18 +88,133 @@
     // Navigation
     html += '<div style="display:flex;justify-content:space-between;margin-top:16px">';
     if (step > 1) {
-      html += `<button class="btn btn-outline" onclick="window._briefPrev()">Back</button>`;
+      html += '<button class="btn btn-outline" onclick="window._briefPrev()">Back</button>';
     } else {
       html += '<div></div>';
     }
-    if (step < 5) {
-      html += `<button class="btn btn-primary" onclick="window._briefNext()">Next</button>`;
+    if (step < TOTAL_STEPS) {
+      html += '<button class="btn btn-primary" onclick="window._briefNext()">Next</button>';
     } else {
-      html += `<button class="btn btn-primary" onclick="window._briefReview()">Review Brief</button>`;
+      html += '<button class="btn btn-primary" onclick="window._briefReview()">Review Brief</button>';
     }
     html += '</div>';
 
     el.innerHTML = html;
+  }
+
+  function renderStep6() {
+    if (!guardrailData) {
+      return `<h3 style="margin-bottom:12px">Guardrail Configuration</h3>
+        <div class="loading-state"><div class="spinner"></div> Loading applicable guardrails...</div>`;
+    }
+
+    const { tier1, tier2, tier3 } = guardrailData;
+    let html = '<h3 style="margin-bottom:16px">Guardrail Configuration</h3>';
+
+    // Section A — Always applied
+    html += '<div style="margin-bottom:20px"><div style="font-weight:600;font-size:14px;color:var(--green);margin-bottom:8px">Always Applied</div>';
+    html += '<p style="font-size:13px;color:var(--text2);margin-bottom:10px">These guardrails are included in every prompt. They cannot be removed.</p>';
+    tier1.forEach(d => {
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:16px;opacity:.5">&#128274;</span>
+        <div style="flex:1"><strong style="font-size:13px">${esc(d.code)}</strong> <span style="font-size:13px;color:var(--text2)">${esc(d.name)}</span>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(d.description)}</div></div>
+      </div>`;
+    });
+    html += '</div>';
+
+    // Section B — Conditionally applied
+    const triggered = tier2.filter(d => d.triggered);
+    const notTriggered = tier2.filter(d => !d.triggered);
+    if (triggered.length) {
+      html += '<div style="margin-bottom:20px"><div style="font-weight:600;font-size:14px;color:var(--amber);margin-bottom:8px">Applied Based on Your Answers</div>';
+      html += '<p style="font-size:13px;color:var(--text2);margin-bottom:10px">These were auto-selected because of your brief. They cannot be removed while the condition is met.</p>';
+      triggered.forEach(d => {
+        html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:16px;opacity:.5">&#128274;</span>
+          <div style="flex:1"><strong style="font-size:13px">${esc(d.code)}</strong> <span style="font-size:13px;color:var(--text2)">${esc(d.name)}</span>
+          <div style="font-size:12px;color:var(--amber);margin-top:2px">Triggered: ${esc(d.trigger_reason)}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(d.description)}</div></div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    if (notTriggered.length) {
+      html += '<div style="margin-bottom:20px"><div style="font-weight:600;font-size:14px;color:var(--text2);margin-bottom:8px">Not Triggered (Conditional)</div>';
+      html += '<p style="font-size:13px;color:var(--text2);margin-bottom:10px">These are available but were not triggered by your answers.</p>';
+      notTriggered.forEach(d => {
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:13px;color:var(--text2);opacity:.5">${esc(d.code)}</span>
+          <span style="font-size:13px;color:var(--text2)">${esc(d.name)} — ${esc(d.trigger_reason)}</span>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    // Section C — Optional
+    html += '<div style="margin-bottom:20px"><div style="font-weight:600;font-size:14px;color:var(--accent);margin-bottom:8px">Optional Guardrails</div>';
+    html += '<p style="font-size:13px;color:var(--text2);margin-bottom:10px">All checked by default. Unchecking reduces your gold standard score.</p>';
+    tier3.forEach(d => {
+      const checked = state.selectedGuardrails.includes(d.code) ? 'checked' : '';
+      html += `<label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox" ${checked} onchange="window._briefGuardrail('${esc(d.code)}',this.checked)" style="margin-top:2px;width:auto">
+        <div style="flex:1"><strong style="font-size:13px">${esc(d.code)}</strong> <span style="font-size:13px;color:var(--text2)">${esc(d.name)}</span>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(d.description)}</div>
+        <div style="font-size:12px;color:var(--amber);margin-top:2px">Removing reduces gold standard by ~${d.score_impact_if_removed} points</div></div>
+      </label>`;
+    });
+    html += '</div>';
+
+    // Gold standard preview
+    html += '<div style="padding:16px;background:var(--surface2);border-radius:8px;display:flex;justify-content:space-between;align-items:center">';
+    html += '<span style="font-size:14px;font-weight:600">Estimated Gold Standard Impact</span>';
+    const totalOptional = tier3.length;
+    const selectedOptional = tier3.filter(d => state.selectedGuardrails.includes(d.code)).length;
+    const removedImpact = tier3.filter(d => !state.selectedGuardrails.includes(d.code)).reduce((sum, d) => sum + (d.score_impact_if_removed || 0), 0);
+    const estimatedMax = 100;
+    const estimated = Math.max(0, Math.round(estimatedMax - removedImpact));
+    const gc = estimated >= 70 ? 'grade-high' : estimated >= 40 ? 'grade-mid' : 'grade-low';
+    html += `<div style="text-align:center"><span class="grade ${gc}" style="width:56px;height:56px;font-size:16px">${estimated}</span>`;
+    html += `<div style="font-size:11px;color:var(--text2);margin-top:4px">${selectedOptional}/${totalOptional} optional selected</div></div>`;
+    html += '</div>';
+
+    return html;
+  }
+
+  async function loadGuardrails() {
+    try {
+      const deployTarget = inferDeployTarget();
+      const riskTier = inferRiskTier();
+      const params = new URLSearchParams({
+        input_type: state.inputType || '',
+        deployment_target: deployTarget,
+        risk_tier: riskTier,
+        prompt_text_snippet: state.purpose || '',
+      });
+      guardrailData = await api('/scoring-dimensions/applicable?' + params.toString());
+
+      // Initialize selectedGuardrails: all tier1 + triggered tier2 + all tier3
+      state.selectedGuardrails = [];
+      guardrailData.tier1.forEach(d => state.selectedGuardrails.push(d.code));
+      guardrailData.tier2.filter(d => d.triggered).forEach(d => state.selectedGuardrails.push(d.code));
+      guardrailData.tier3.forEach(d => state.selectedGuardrails.push(d.code));
+
+      renderStep();
+    } catch (e) {
+      const el = document.getElementById('view-brief');
+      if (el) el.querySelector('.card').innerHTML = '<p style="color:var(--red)">' + esc(e.message) + '</p>';
+    }
+  }
+
+  function inferDeployTarget() {
+    if (state.constraints.includes('Third-party AI platform (not internal)')) return 'External';
+    return 'Internal';
+  }
+
+  function inferRiskTier() {
+    if (state.constraints.includes('Connects to a critical operational process')) return 'High';
+    if (state.constraints.includes('Involves personal or sensitive data')) return 'Limited';
+    return 'Minimal';
   }
 
   function buildBriefText() {
@@ -104,6 +226,9 @@
     if (state.constraints.length) {
       lines.push('CONSTRAINTS:');
       state.constraints.forEach(c => lines.push('  - ' + c));
+    }
+    if (state.selectedGuardrails.length) {
+      lines.push('SELECTED GUARDRAILS: ' + state.selectedGuardrails.join(', '));
     }
     return lines.join('\n');
   }
@@ -119,6 +244,7 @@
           <tr><td style="color:var(--text2);vertical-align:top">Output type</td><td>${esc(state.outputType || '(not specified)')}</td></tr>
           <tr><td style="color:var(--text2);vertical-align:top">Audience</td><td>${esc(state.audience || '(not specified)')}</td></tr>
           <tr><td style="color:var(--text2);vertical-align:top">Constraints</td><td>${state.constraints.length ? state.constraints.map(c => esc(c)).join('<br>') : '(none selected)'}</td></tr>
+          <tr><td style="color:var(--text2);vertical-align:top">Guardrails</td><td>${state.selectedGuardrails.length} dimensions selected (${state.selectedGuardrails.join(', ')})</td></tr>
         </table>
       </div>
       <div class="card">
@@ -139,10 +265,20 @@
     if (checked && !state.constraints.includes(opt)) state.constraints.push(opt);
     if (!checked) state.constraints = state.constraints.filter(c => c !== opt);
   };
-  window._briefPrev = function () { saveStepState(); step--; renderStep(); };
-  window._briefNext = function () { saveStepState(); step++; renderStep(); };
+  window._briefGuardrail = function (code, checked) {
+    if (checked && !state.selectedGuardrails.includes(code)) state.selectedGuardrails.push(code);
+    if (!checked) state.selectedGuardrails = state.selectedGuardrails.filter(c => c !== code);
+    renderStep();
+  };
+  window._briefPrev = function () { saveStepState(); step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
+  window._briefNext = function () {
+    saveStepState();
+    step++;
+    if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
+    else renderStep();
+  };
   window._briefReview = function () { saveStepState(); renderReview(); };
-  window._briefBack = function () { step = 1; renderStep(); };
+  window._briefBack = function () { step = 1; guardrailData = null; renderStep(); };
 
   window._briefCopy = function () {
     const text = buildBriefText();
@@ -154,6 +290,7 @@
   };
 
   window._briefSend = function () {
+    const guardrails = [...state.selectedGuardrails];
     navigate('generator');
     setTimeout(() => {
       const title = document.getElementById('gen-title');
@@ -164,7 +301,6 @@
 
       if (title && !title.value) title.value = state.purpose.substring(0, 80);
 
-      // Map output type to prompt type
       const typeMap = {
         'Structured assessment': 'Analysis',
         'Executive summary': 'Summarisation',
@@ -175,10 +311,7 @@
         'Data extraction': 'Extraction',
         'Comparison table': 'Comparison',
       };
-      if (type && state.outputType && typeMap[state.outputType]) {
-        type.value = typeMap[state.outputType];
-      }
-
+      if (type && state.outputType && typeMap[state.outputType]) type.value = typeMap[state.outputType];
       if (input) input.value = state.inputType || input.value;
       if (output) output.value = state.outputType || output.value;
 
@@ -188,6 +321,8 @@
         textarea.style.height = textarea.scrollHeight + 'px';
       }
 
+      // Store selected guardrails for the generator to use
+      window._briefSelectedGuardrails = guardrails;
       toast('Brief loaded into Generator — click Generate with AI');
     }, 100);
   };

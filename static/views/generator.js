@@ -125,14 +125,20 @@ async function genAI() {
   const textarea = document.getElementById('gen-text');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating...';
   try {
-    const resp = await api('/prompts/generate', { method: 'POST', body: {
+    const body = {
       title,
       prompt_type: document.getElementById('gen-type').value,
       deployment_target: document.getElementById('gen-deploy').value || '',
       input_type: document.getElementById('gen-input').value || '',
       output_type: document.getElementById('gen-output').value || '',
       brief_text: textarea.value.trim(),
-    }});
+    };
+    // If Brief Builder passed selected guardrails, include them
+    if (window._briefSelectedGuardrails && window._briefSelectedGuardrails.length) {
+      body.selected_guardrails = window._briefSelectedGuardrails;
+      window._briefSelectedGuardrails = null; // consume once
+    }
+    const resp = await api('/prompts/generate', { method: 'POST', body });
     textarea.value = resp.prompt_text;
     textarea.style.height = 'auto';
     textarea.style.height = textarea.scrollHeight + 'px';
