@@ -498,10 +498,13 @@ def generate_prompt_text(
                 detail=f"Injection detected in brief text: {scan_result['message']}",
             )
 
+    from services.prompt_components import get_input_handler_text
+
     selected_dims = _resolve_guardrails(body, db)
     guardrail_block = "\n".join(
         f"- {d.code} ({d.name}): {d.description}" for d in selected_dims
     )
+    input_handler = get_input_handler_text(body.input_type)
     system_prompt = _GENERATE_SYSTEM_PROMPT_TEMPLATE.replace("{guardrail_block}", guardrail_block)
 
     brief_parts = [f"Title: {body.title}", f"Prompt type: {body.prompt_type}"]
@@ -513,8 +516,9 @@ def generate_prompt_text(
         brief_parts.append(f"Output type: {body.output_type}")
     if body.brief_text:
         brief_parts.append(f"Additional brief:\n{body.brief_text}")
+    brief_parts.append(f"\nINPUT HANDLER COMPONENT TO INCLUDE IN THE GENERATED PROMPT:\n{input_handler}")
 
-    user_message = "BRIEF:\n" + "\n".join(brief_parts) + "\n\nGenerate the prompt now."
+    user_message = "BRIEF:\n" + "\n".join(brief_parts) + "\n\nGenerate the prompt now. Include the input handler component verbatim in the prompt."
 
     try:
         client = anthropic.Anthropic()
