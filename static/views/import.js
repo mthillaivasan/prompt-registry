@@ -59,11 +59,15 @@ function renderProposal(container, p) {
 
   // Classification
   if (p.inferred_purpose) {
+    const ptOpts = ['Governance','Analysis','Comms','Classification','Summarisation','Extraction','Comparison','Risk Review'];
+    const rtOpts = ['Minimal','Limited','High','Prohibited'];
+    const ptSelect = ptOpts.map(o => `<option${o === p.inferred_prompt_type ? ' selected' : ''}>${o}</option>`).join('');
+    const rtSelect = rtOpts.map(o => `<option${o === p.inferred_risk_tier ? ' selected' : ''}>${o}</option>`).join('');
     html += `<div class="card"><div class="card-title" style="margin-bottom:12px">Classification</div>
       <table>
         <tr><td style="color:var(--text2);width:180px">Purpose</td><td>${esc(p.inferred_purpose)}</td></tr>
-        <tr><td style="color:var(--text2)">Type</td><td>${esc(p.inferred_prompt_type || '-')}</td></tr>
-        <tr><td style="color:var(--text2)">Risk Tier</td><td><span class="badge ${riskClass}">${esc(p.inferred_risk_tier || '-')}</span></td></tr>
+        <tr><td style="color:var(--text2)">Type</td><td><select style="width:auto;min-width:180px" id="import-override-type">${ptSelect}</select></td></tr>
+        <tr><td style="color:var(--text2)">Risk Tier</td><td><select style="width:auto;min-width:180px" id="import-override-risk">${rtSelect}</select></td></tr>
         <tr><td style="color:var(--text2)">Confidence</td><td>${esc(p.classification_confidence || '-')}</td></tr>
       </table></div>`;
   }

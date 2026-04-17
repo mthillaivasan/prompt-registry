@@ -12,14 +12,46 @@ viewInits.generator = function () {
             <option>Extraction</option><option>Comparison</option><option>Risk Review</option>
           </select>
         </div>
-        <div class="form-group"><label>Deployment Target</label><input type="text" id="gen-deploy" placeholder="e.g. Internal, OpenAI, MS Copilot"></div>
+        <div class="form-group"><label>Deployment Target</label>
+          <select id="gen-deploy">
+            <option selected>Claude</option>
+            <option>MS Copilot Agent - Declarative</option>
+            <option>MS Copilot Agent - Custom Engine</option>
+            <option>OpenAI</option>
+            <option>Multi-model</option>
+            <option>Other</option>
+          </select>
+        </div>
         <div class="form-group"><label>Risk Tier</label>
           <select id="gen-risk">
             <option>Minimal</option><option selected>Limited</option><option>High</option><option>Prohibited</option>
           </select>
         </div>
-        <div class="form-group"><label>Input Type</label><input type="text" id="gen-input" value="Plain text"></div>
-        <div class="form-group"><label>Output Type</label><input type="text" id="gen-output" value="Plain text"></div>
+        <div class="form-group"><label>Input Type</label>
+          <select id="gen-input">
+            <option>Form responses</option>
+            <option>Document or report</option>
+            <option>Data table</option>
+            <option>Email thread</option>
+            <option selected>Free text</option>
+            <option>JSON or structured data</option>
+            <option>Meeting notes</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Output Type</label>
+          <select id="gen-output">
+            <option>Structured assessment</option>
+            <option selected>Executive narrative</option>
+            <option>Briefing note</option>
+            <option>Recommendation</option>
+            <option>Flag report</option>
+            <option>Draft comms</option>
+            <option>Comparison table</option>
+            <option>Data extraction</option>
+            <option>Other</option>
+          </select>
+        </div>
       </div>
       <div class="form-group">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
