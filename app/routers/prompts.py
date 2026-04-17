@@ -221,33 +221,59 @@ def update_prompt(
 # ── Validate brief description via Claude ────────────────────────────────────
 
 _VALIDATE_BRIEF_PROMPT = """\
-You are a helpful coaching assistant reviewing an AI prompt brief for a \
-regulated financial services firm. Assess the quality of this description \
-and classify it into one of three tiers.
+You are a strict quality gate reviewing an AI prompt brief for a \
+regulated financial services firm. Classify into three tiers.
 
 The user has provided this description:
 "{user_input}"
 
-TIER 1 — Strong brief. The description names a specific document type or \
-data source, describes what the AI should produce, and indicates who uses \
-the result. Return JSON: {{"tier": 1}}
+THREE MANDATORY ELEMENTS — all three must be present for Tier 1:
 
-TIER 2 — Workable brief. The description is usable but could be improved \
-with one specific addition. Return JSON:
-{{"tier": 2, "suggestion": "one sentence explaining the improvement", \
+1. SPECIFIC DATA OR CONTENT — not "key data", "information", or \
+"documents". Must name what specifically is being extracted, summarised, \
+or assessed. Acceptable: "subscription cut-off times", "FINMA obligations", \
+"risk ratings", "counterparty names and settlement dates". \
+Unacceptable: "key data", "relevant information", "important details".
+
+2. CLEAR OUTPUT — not just "structured assessment" or "useful output". \
+Must indicate what the output contains or how it is structured. \
+Acceptable: "a table of cut-off times by share class", "a one-page \
+summary of obligations with action flags", "a JSON object with named \
+fields". Unacceptable: "useful data", "structured output", "summary".
+
+3. CLEAR NEXT STEP — who uses the output and what they do with it. \
+Acceptable: "for operations staff to manually key into Simcorp", \
+"for the CRO to brief the board", "for the compliance team to assess \
+against FINMA requirements". \
+Unacceptable: "useful for manual input", "for the team", "for core systems".
+
+ALSO REJECT if the input has broken grammar, is a sentence fragment, \
+or appears hasty — ask the user to rephrase clearly.
+
+TIER 1 — All three elements present and specific. \
+Return JSON: {{"tier": 1}}
+
+TIER 2 — Two of three elements present. One element is weak but \
+inferable. Return JSON: \
+{{"tier": 2, "suggestion": "one sentence explaining the missing element", \
 "suggested_addition": "the specific phrase to add"}}
 
-TIER 3 — Too vague. The description is fewer than 8 words, uses only \
-generic terms (summarise, analyse, process, help, review, check, document), \
-or does not name any specific input type. Return JSON:
-{{"tier": 3, "question": "one specific clarifying question", \
+TIER 3 — One or more elements missing or vague. Generic language used. \
+Return JSON: \
+{{"tier": 3, "question": "one targeted question about the weakest missing element", \
 "options": ["option1", "option2", "option3", "option4", "option5", "option6"], \
 "free_text_placeholder": "Or describe..."}}
 
-The options must be relevant domain-specific choices for the question asked.
+Options must be domain-specific choices relevant to the question.
 
-Most descriptions should be Tier 1 or Tier 2. Only use Tier 3 when the \
-input is genuinely too vague to generate any useful prompt.
+Example that MUST be Tier 3: "This is a prompt will take key data from \
+a funds prospectus document that will be useful for manual input into \
+the core systems" — "key data" is not specific, "useful for manual input" \
+does not describe the output, "core systems" is not specific.
+
+Example that is Tier 1: "Extract subscription cut-off times and minimum \
+investment amounts from fund prospectus documents into a table by share \
+class for operations staff to key into Simcorp Dimension before 14:00 CET"
 
 Return ONLY valid JSON. No preamble."""
 
