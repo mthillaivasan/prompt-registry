@@ -297,6 +297,37 @@ class for operations staff to key into Simcorp Dimension before 14:00 CET"
 Return ONLY valid JSON. No preamble."""
 
 
+_DEDUP_PROMPT = """\
+You are deciding whether to ask a follow-up question in a brief building session.
+
+Full conversation so far:
+{conversation_history}
+
+Proposed follow-up question:
+{proposed_question}
+
+Has the conversation already answered this question or made it irrelevant? Reply with YES or NO only.
+
+If YES — do not ask the question.
+If NO — ask the question."""
+
+
+def _is_question_redundant(client, question: str, history: list[str]) -> bool:
+    if not history:
+        return False
+    conversation = "\n".join(history)
+    prompt = _DEDUP_PROMPT.replace("{conversation_history}", conversation).replace("{proposed_question}", question)
+    try:
+        response = client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            max_tokens=8,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip().upper().startswith("YES")
+    except Exception:
+        return False
+
+
 @router.post("/validate-brief", response_model=ValidateBriefResponse)
 def validate_brief(
     body: ValidateBriefRequest,
@@ -320,15 +351,23 @@ def validate_brief(
         if tier == 1:
             return ValidateBriefResponse(tier=1, accepted=True)
         elif tier == 2:
+            suggestion = parsed.get("suggestion", "")
+            if body.conversation_history and suggestion:
+                if _is_question_redundant(client, suggestion, body.conversation_history):
+                    return ValidateBriefResponse(tier=1, accepted=True)
             return ValidateBriefResponse(
                 tier=2, accepted=True,
-                suggestion=parsed.get("suggestion"),
+                suggestion=suggestion,
                 suggested_addition=parsed.get("suggested_addition"),
             )
         else:
+            question = parsed.get("question", "")
+            if body.conversation_history and question:
+                if _is_question_redundant(client, question, body.conversation_history):
+                    return ValidateBriefResponse(tier=1, accepted=True)
             return ValidateBriefResponse(
                 tier=3, accepted=False,
-                question=parsed.get("question"),
+                question=question,
                 options=parsed.get("options"),
                 free_text_placeholder=parsed.get("free_text_placeholder"),
             )

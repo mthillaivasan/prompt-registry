@@ -115,6 +115,7 @@ class GenerateResponse(BaseModel):
 
 class ValidateBriefRequest(BaseModel):
     description: str = Field(min_length=1)
+    conversation_history: list[str] = []
 
 
 class ValidateBriefResponse(BaseModel):

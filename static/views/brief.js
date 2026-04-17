@@ -586,7 +586,15 @@
       const btn = document.getElementById('brief-next-btn');
       if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Checking...'; }
       try {
-        const resp = await api('/prompts/validate-brief', { method: 'POST', body: { description: state.purpose } });
+        const history = [];
+        if (state.purpose) history.push('Purpose: ' + state.purpose);
+        if (state.clientName) history.push('Client: ' + state.clientName);
+        if (state.ownerName) history.push('Owner: ' + state.ownerName);
+        if (state.inputType) history.push('Input type: ' + state.inputType);
+        if (state.outputType) history.push('Output type: ' + state.outputType);
+        if (state.audience) history.push('Audience: ' + state.audience);
+        if (state.constraints.length) history.push('Constraints: ' + state.constraints.join(', '));
+        const resp = await api('/prompts/validate-brief', { method: 'POST', body: { description: state.purpose, conversation_history: history } });
         validationResult = resp;
         if (resp.tier === 1) {
           // Strong — proceed
