@@ -2,8 +2,9 @@
 (function () {
   const TOTAL_STEPS = 6;
   let step = 1;
+  let validationError = '';
   const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [] };
-  let guardrailData = null; // cached response from /scoring-dimensions/applicable
+  let guardrailData = null;
 
   const INPUT_OPTIONS = ['Form responses', 'Document or report', 'Data table', 'Email thread', 'Free text', 'Structured data', 'Meeting notes', 'Other'];
   const OUTPUT_OPTIONS = ['Structured assessment', 'Executive summary', 'Briefing note', 'Recommendation', 'Flag report', 'Draft email or communication', 'Data extraction', 'Comparison table', 'Other'];
@@ -19,12 +20,28 @@
   ];
 
   viewInits.brief = function () {
-    step = 1;
+    step = 1; validationError = '';
     state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
     state.constraints = []; state.selectedGuardrails = [];
     guardrailData = null;
     renderStep();
   };
+
+  function isStepValid() {
+    if (step === 1) return state.purpose.length >= 20;
+    if (step === 2) return !!state.inputType;
+    if (step === 3) return !!state.outputType;
+    if (step === 4) return !!state.audience;
+    return true; // steps 5, 6 always valid
+  }
+
+  function getValidationHint() {
+    if (step === 1) return 'Please describe what this prompt needs to do in at least 20 characters';
+    if (step === 2) return 'Please select an input type';
+    if (step === 3) return 'Please select an output type';
+    if (step === 4) return 'Please select an audience';
+    return '';
+  }
 
   function renderStep() {
     const el = document.getElementById('view-brief');
@@ -36,11 +53,20 @@
     let html = '<h2 style="margin-bottom:8px">Brief Builder</h2><p style="color:var(--text2);margin-bottom:20px;font-size:14px">Step ' + step + ' of ' + TOTAL_STEPS + '</p>' + progress + '<div class="card">';
 
     if (step === 1) {
+      const charCount = state.purpose.length;
+      const isValid = charCount >= 20;
+      const borderColor = validationError && !isValid ? 'var(--red)' : 'var(--border)';
       html += `<h3 style="margin-bottom:12px">What does this prompt need to do?</h3>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Describe in one or two sentences what you want the AI to do.</p>
         <div class="form-group">
-          <textarea id="brief-purpose" rows="4" placeholder="e.g. Summarise incoming customer complaints and flag any that mention regulatory obligations or potential liability.">${esc(state.purpose)}</textarea>
+          <textarea id="brief-purpose" rows="4" style="border-color:${borderColor}" oninput="window._briefPurposeInput(this.value)" placeholder="e.g. Summarise incoming customer complaints and flag any that mention regulatory obligations or potential liability.">${esc(state.purpose)}</textarea>
+          <div style="display:flex;justify-content:space-between;margin-top:6px">
+            <span style="font-size:12px;color:${isValid ? 'var(--green)' : 'var(--text2)'}">${charCount}/20 characters ${isValid ? '&#10003;' : 'minimum'}</span>
+          </div>
         </div>`;
+      if (validationError && !isValid) {
+        html += `<p style="color:var(--red);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
+      }
     } else if (step === 2) {
       html += `<h3 style="margin-bottom:12px">What goes in?</h3>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">What will the AI receive as input?</p>
@@ -50,6 +76,9 @@
         html += `<button class="btn ${sel ? 'btn-primary' : 'btn-outline'}" onclick="window._briefSelect('inputType','${esc(opt)}')">${esc(opt)}</button>`;
       });
       html += '</div>';
+      if (validationError && !state.inputType) {
+        html += `<p style="color:var(--red);font-size:13px;margin-top:12px">${getValidationHint()}</p>`;
+      }
     } else if (step === 3) {
       html += `<h3 style="margin-bottom:12px">What comes out?</h3>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">What should the AI produce?</p>
@@ -59,6 +88,9 @@
         html += `<button class="btn ${sel ? 'btn-primary' : 'btn-outline'}" onclick="window._briefSelect('outputType','${esc(opt)}')">${esc(opt)}</button>`;
       });
       html += '</div>';
+      if (validationError && !state.outputType) {
+        html += `<p style="color:var(--red);font-size:13px;margin-top:12px">${getValidationHint()}</p>`;
+      }
     } else if (step === 4) {
       html += `<h3 style="margin-bottom:12px">Who receives the output?</h3>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Who will read or use the AI output?</p>
@@ -68,6 +100,9 @@
         html += `<button class="btn ${sel ? 'btn-primary' : 'btn-outline'}" onclick="window._briefSelect('audience','${esc(opt)}')">${esc(opt)}</button>`;
       });
       html += '</div>';
+      if (validationError && !state.audience) {
+        html += `<p style="color:var(--red);font-size:13px;margin-top:12px">${getValidationHint()}</p>`;
+      }
     } else if (step === 5) {
       html += `<h3 style="margin-bottom:12px">Any constraints?</h3>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Select all that apply.</p>
@@ -87,6 +122,7 @@
     html += '</div>';
 
     // Navigation
+    const valid = isStepValid();
     html += '<div style="display:flex;justify-content:space-between;margin-top:16px">';
     if (step > 1) {
       html += '<button class="btn btn-outline" onclick="window._briefPrev()">Back</button>';
@@ -94,7 +130,8 @@
       html += '<div></div>';
     }
     if (step < TOTAL_STEPS) {
-      html += '<button class="btn btn-primary" onclick="window._briefNext()">Next</button>';
+      const disabledStyle = valid ? '' : 'opacity:0.4;cursor:not-allowed;pointer-events:none';
+      html += `<button class="btn btn-primary" id="brief-next-btn" style="${disabledStyle}" onclick="window._briefNext()">Next</button>`;
     } else {
       html += '<button class="btn btn-primary" onclick="window._briefReview()">Review Brief</button>';
     }
@@ -112,7 +149,6 @@
     const { tier1, tier2, tier3 } = guardrailData;
     let html = '<h3 style="margin-bottom:16px">Guardrail Configuration</h3>';
 
-    // Section A — Always applied
     html += '<div style="margin-bottom:20px"><div style="font-weight:600;font-size:14px;color:var(--green);margin-bottom:8px">Always Applied</div>';
     html += '<p style="font-size:13px;color:var(--text2);margin-bottom:10px">These guardrails are included in every prompt. They cannot be removed.</p>';
     tier1.forEach(d => {
@@ -124,7 +160,6 @@
     });
     html += '</div>';
 
-    // Section B — Conditionally applied
     const triggered = tier2.filter(d => d.triggered);
     const notTriggered = tier2.filter(d => !d.triggered);
     if (triggered.length) {
@@ -152,7 +187,6 @@
       html += '</div>';
     }
 
-    // Section C — Optional
     html += '<div style="margin-bottom:20px"><div style="font-weight:600;font-size:14px;color:var(--accent);margin-bottom:8px">Optional Guardrails</div>';
     html += '<p style="font-size:13px;color:var(--text2);margin-bottom:10px">All checked by default. Unchecking reduces your gold standard score.</p>';
     tier3.forEach(d => {
@@ -166,14 +200,12 @@
     });
     html += '</div>';
 
-    // Gold standard preview
     html += '<div style="padding:16px;background:var(--surface2);border-radius:8px;display:flex;justify-content:space-between;align-items:center">';
     html += '<span style="font-size:14px;font-weight:600">Estimated Gold Standard Impact</span>';
     const totalOptional = tier3.length;
     const selectedOptional = tier3.filter(d => state.selectedGuardrails.includes(d.code)).length;
     const removedImpact = tier3.filter(d => !state.selectedGuardrails.includes(d.code)).reduce((sum, d) => sum + (d.score_impact_if_removed || 0), 0);
-    const estimatedMax = 100;
-    const estimated = Math.max(0, Math.round(estimatedMax - removedImpact));
+    const estimated = Math.max(0, Math.round(100 - removedImpact));
     const gc = estimated >= 70 ? 'grade-high' : estimated >= 40 ? 'grade-mid' : 'grade-low';
     html += `<div style="text-align:center"><span class="grade ${gc}" style="width:56px;height:56px;font-size:16px">${estimated}</span>`;
     html += `<div style="font-size:11px;color:var(--text2);margin-top:4px">${selectedOptional}/${totalOptional} optional selected</div></div>`;
@@ -184,22 +216,17 @@
 
   async function loadGuardrails() {
     try {
-      const deployTarget = inferDeployTarget();
-      const riskTier = inferRiskTier();
       const params = new URLSearchParams({
         input_type: state.inputType || '',
-        deployment_target: deployTarget,
-        risk_tier: riskTier,
+        deployment_target: inferDeployTarget(),
+        risk_tier: inferRiskTier(),
         prompt_text_snippet: state.purpose || '',
       });
       guardrailData = await api('/scoring-dimensions/applicable?' + params.toString());
-
-      // Initialize selectedGuardrails: all tier1 + triggered tier2 + all tier3
       state.selectedGuardrails = [];
       guardrailData.tier1.forEach(d => state.selectedGuardrails.push(d.code));
       guardrailData.tier2.filter(d => d.triggered).forEach(d => state.selectedGuardrails.push(d.code));
       guardrailData.tier3.forEach(d => state.selectedGuardrails.push(d.code));
-
       renderStep();
     } catch (e) {
       const el = document.getElementById('view-brief');
@@ -261,7 +288,7 @@
   }
 
   // Exposed handlers
-  window._briefSelect = function (field, val) { state[field] = val; renderStep(); };
+  window._briefSelect = function (field, val) { state[field] = val; validationError = ''; renderStep(); };
   window._briefToggle = function (opt, checked) {
     if (checked && !state.constraints.includes(opt)) state.constraints.push(opt);
     if (!checked) state.constraints = state.constraints.filter(c => c !== opt);
@@ -271,15 +298,27 @@
     if (!checked) state.selectedGuardrails = state.selectedGuardrails.filter(c => c !== code);
     renderStep();
   };
-  window._briefPrev = function () { saveStepState(); step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
+  window._briefPurposeInput = function (val) {
+    state.purpose = val;
+    validationError = '';
+    // Live-update the Next button and char count without full re-render
+    const btn = document.getElementById('brief-next-btn');
+    if (btn) {
+      if (val.length >= 20) { btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.style.pointerEvents = 'auto'; }
+      else { btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; btn.style.pointerEvents = 'none'; }
+    }
+  };
+  window._briefPrev = function () { saveStepState(); validationError = ''; step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
   window._briefNext = function () {
     saveStepState();
+    if (!isStepValid()) { validationError = getValidationHint(); renderStep(); return; }
+    validationError = '';
     step++;
     if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
     else renderStep();
   };
   window._briefReview = function () { saveStepState(); renderReview(); };
-  window._briefBack = function () { step = 1; guardrailData = null; renderStep(); };
+  window._briefBack = function () { step = 1; validationError = ''; guardrailData = null; renderStep(); };
 
   window._briefCopy = function () {
     const text = buildBriefText();
@@ -322,7 +361,6 @@
         textarea.style.height = textarea.scrollHeight + 'px';
       }
 
-      // Store selected guardrails for the generator to use
       window._briefSelectedGuardrails = guardrails;
       toast('Brief loaded into Generator — click Generate with AI');
     }, 100);
