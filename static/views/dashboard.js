@@ -37,26 +37,32 @@ function renderDashContent(prompts, briefs) {
   if (!container) return;
   let html = '';
 
-  // Briefs section
+  // Briefs section — card layout
   if (_dashFilter !== 'prompts' && briefs.length > 0) {
-    html += '<div class="card" style="padding:0;overflow:hidden"><table><thead><tr>';
-    html += '<th></th><th>Client</th><th>Owner</th><th>Progress</th><th>Quality</th><th>Updated</th><th></th>';
-    html += '</tr></thead><tbody>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:16px">';
     briefs.forEach(b => {
       const answers = JSON.parse(b.step_answers || '{}');
       const purpose = answers.purpose || '';
+      const title = purpose ? purpose.substring(0, 50) : (b.client_name || 'Untitled brief');
       const qualityColor = b.quality_score >= 70 ? 'var(--green)' : b.quality_score >= 40 ? 'var(--amber)' : 'var(--red)';
-      html += `<tr style="cursor:pointer" onclick="navigate('brief',{briefId:'${b.brief_id}'})">
-        <td><span class="badge badge-amber">Brief</span></td>
-        <td><strong>${esc(b.client_name || '—')}</strong>${purpose ? '<br><span style="font-size:12px;color:var(--text2)">' + esc(purpose.substring(0, 60)) + '</span>' : ''}</td>
-        <td style="font-size:13px;color:var(--text2)">${esc(b.business_owner_name || '—')}</td>
-        <td><span class="mono" style="font-size:13px">Step ${b.step_progress}/6</span></td>
-        <td><span class="mono" style="font-size:13px;color:${qualityColor}">${b.quality_score}</span></td>
-        <td style="color:var(--text2)">${timeAgo(b.updated_at)}</td>
-        <td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();navigate('brief',{briefId:'${b.brief_id}'})">Continue</button></td>
-      </tr>`;
+      const qualityLabel = b.quality_score >= 80 ? 'Gold standard' : b.quality_score >= 60 ? 'Strong' : b.quality_score >= 40 ? 'Reasonable' : 'Weak';
+      const dots = Array.from({length: 6}, (_, i) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${i < b.step_progress ? 'var(--accent)' : 'var(--border)'}"></span>`).join('');
+      const ownerLine = b.business_owner_name ? esc(b.business_owner_name) + (b.business_owner_role ? ', ' + esc(b.business_owner_role) : '') : '—';
+      html += `<div class="card" style="cursor:pointer;border-color:var(--border);transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="navigate('brief',{briefId:'${b.brief_id}'})">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span class="badge badge-gold" style="font-size:11px">IN BRIEF</span>
+          <span style="display:flex;align-items:center;gap:4px">${dots}<span class="mono" style="font-size:11px;color:var(--text2);margin-left:4px">Step ${b.step_progress}/6</span></span>
+        </div>
+        <h3 style="font-size:16px;margin-bottom:10px">${esc(title)}</h3>
+        <div style="font-size:13px;color:var(--text2);line-height:1.8">
+          <div>Owner: ${ownerLine}</div>
+          <div>Quality: <span class="mono" style="color:${qualityColor}">${b.quality_score}</span> — ${qualityLabel}</div>
+          <div>Started: ${timeAgo(b.created_at)} &middot; Updated: ${timeAgo(b.updated_at)}</div>
+        </div>
+        <button class="btn btn-gold btn-sm" style="margin-top:14px;width:100%;justify-content:center" onclick="event.stopPropagation();navigate('brief',{briefId:'${b.brief_id}'})">Continue Brief</button>
+      </div>`;
     });
-    html += '</tbody></table></div>';
+    html += '</div>';
   }
 
   // Prompts section
