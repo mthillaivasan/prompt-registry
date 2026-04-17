@@ -152,6 +152,28 @@ def save_step(
     return BriefOut.model_validate(brief)
 
 
+@router.post("/{brief_id}/skip-step/{step_num}")
+def skip_step(
+    brief_id: str,
+    step_num: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    step_names = {2: "Input type", 3: "Output type", 4: "Audience", 5: "Constraints"}
+    brief = db.query(Brief).filter(Brief.brief_id == brief_id).first()
+    if not brief:
+        raise HTTPException(status_code=404, detail="Brief not found")
+    db.add(AuditLog(
+        user_id=current_user.user_id,
+        action="BriefStepSkipped",
+        entity_type="Brief",
+        entity_id=brief.brief_id,
+        detail=json.dumps({"step": step_num, "step_name": step_names.get(step_num, f"Step {step_num}")}),
+    ))
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/{brief_id}/complete", response_model=BriefOut)
 def complete_brief(
     brief_id: str,

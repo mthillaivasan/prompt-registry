@@ -133,6 +133,7 @@ class BriefScoreRequest(BaseModel):
     audience: str = ""
     constraints: list[str] = []
     deployment_target: str = ""
+    skipped_steps: list[int] = []
 
 
 class BriefScoreResponse(BaseModel):

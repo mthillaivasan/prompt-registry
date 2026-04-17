@@ -367,7 +367,11 @@ def score_brief(
     if body.purpose and len(body.purpose) >= 50:
         completeness = min(25, completeness + 3)
 
-    total = min(100, specificity + context + constraints_score + completeness)
+    # Skip penalties
+    skip_penalties = {2: 8, 3: 8, 4: 10, 5: 4}
+    skip_deduction = sum(skip_penalties.get(s, 0) for s in body.skipped_steps)
+
+    total = max(0, min(100, specificity + context + constraints_score + completeness - skip_deduction))
 
     if total >= 80:
         label = "Gold standard brief"

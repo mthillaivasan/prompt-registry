@@ -44,15 +44,26 @@
           // Show resume prompt if coming from nav (not from dashboard Continue)
           if (!params || !params.briefId) {
             const el = document.getElementById('view-brief');
-            el.innerHTML = `<div class="card" style="max-width:500px;margin:60px auto;text-align:center">
+            const bAnswers = JSON.parse(b.step_answers || '{}');
+            const bSkipped = bAnswers.skipped || [];
+            const nSkipped = bSkipped.length;
+            let resumeHtml = `<div class="card" style="max-width:500px;margin:60px auto;text-align:center">
               <h3 style="margin-bottom:12px">You have an unfinished brief</h3>
-              <p style="color:var(--text2);margin-bottom:8px">${esc(b.client_name || 'Untitled')} — Step ${b.step_progress}/6</p>
-              <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Last updated ${timeAgo(b.updated_at)}</p>
-              <div style="display:flex;gap:12px;justify-content:center">
-                <button class="btn btn-gold" onclick="navigate('brief',{briefId:'${b.brief_id}'})">Continue Brief</button>
-                <button class="btn btn-outline" onclick="navigate('brief',{startNew:true})">Start New</button>
+              <p style="color:var(--text2);margin-bottom:8px">${esc(b.client_name || 'Untitled')} — Step ${b.step_progress}/6</p>`;
+            if (nSkipped > 0) {
+              resumeHtml += `<p style="color:var(--amber);font-size:13px;margin-bottom:8px">You have ${nSkipped} skipped step${nSkipped > 1 ? 's' : ''}. Complete them for a stronger brief.</p>`;
+            }
+            resumeHtml += `<p style="color:var(--text2);font-size:13px;margin-bottom:20px">Last updated ${timeAgo(b.updated_at)}</p>
+              <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+                <button class="btn btn-gold" onclick="navigate('brief',{briefId:'${b.brief_id}'})">Continue Brief</button>`;
+            if (nSkipped > 0) {
+              const firstSkipped = bSkipped[0].step;
+              resumeHtml += `<button class="btn btn-outline" onclick="navigate('brief',{briefId:'${b.brief_id}',jumpTo:${firstSkipped}})">Complete skipped steps</button>`;
+            }
+            resumeHtml += `<button class="btn btn-outline" onclick="navigate('brief',{startNew:true})">Start New</button>
               </div>
             </div>`;
+            el.innerHTML = resumeHtml;
             return;
           }
           briefId = b.brief_id;
@@ -70,6 +81,7 @@
           state.skipped = answers.skipped || [];
           state.selectedGuardrails = JSON.parse(b.selected_guardrails || '[]');
           localStorage.setItem('pr_active_brief', briefId);
+          if (params && params.jumpTo) step = params.jumpTo;
         }
       } catch (e) {
         localStorage.removeItem('pr_active_brief');
@@ -117,10 +129,12 @@
 
   function renderStep() {
     const el = document.getElementById('view-brief');
+    const skippedNums = new Set(state.skipped.map(s => s.step));
     const progress = `<div style="display:flex;gap:4px;margin-bottom:12px">${
-      Array.from({length: TOTAL_STEPS}, (_, i) => i + 1).map(i =>
-        `<div style="flex:1;height:4px;border-radius:2px;background:${i <= step ? 'var(--accent)' : 'var(--surface2)'}"></div>`
-      ).join('')}</div>`;
+      Array.from({length: TOTAL_STEPS}, (_, i) => i + 1).map(i => {
+        if (skippedNums.has(i)) return `<div style="flex:1;height:4px;border-radius:2px;border:1px solid var(--amber);background:transparent"></div>`;
+        return `<div style="flex:1;height:4px;border-radius:2px;background:${i <= step ? 'var(--accent)' : 'var(--surface2)'}"></div>`;
+      }).join('')}</div>`;
     const remaining = STEP_NAMES.slice(step).map(n => esc(n)).join(' &middot; ');
 
     let html = `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
@@ -136,9 +150,9 @@
       const isValid = charCount >= 20;
       html += `<h3 style="margin-bottom:12px">What does this prompt need to do?</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
-          <div class="form-group"><label>Client</label><input type="text" id="brief-client" value="${esc(state.clientName)}" placeholder="e.g. Lombard Odier" onchange="window._briefMeta('clientName',this.value)"></div>
-          <div class="form-group"><label>Business owner</label><input type="text" id="brief-owner" value="${esc(state.ownerName)}" placeholder="e.g. Sarah Chen" onchange="window._briefMeta('ownerName',this.value)"></div>
-          <div class="form-group"><label>Role</label><input type="text" id="brief-role" value="${esc(state.ownerRole)}" placeholder="e.g. Head of Settlement" onchange="window._briefMeta('ownerRole',this.value)"></div>
+          <div class="form-group"><label>Client</label><input type="text" id="brief-client" value="${esc(state.clientName)}" placeholder="e.g. Lombard Odier" onchange="window._briefMeta('clientName',this.value)"><a style="font-size:11px;color:var(--text2);cursor:pointer;margin-top:4px;display:block" onclick="document.getElementById('brief-client').value='';window._briefMeta('clientName','')">Skip for now</a></div>
+          <div class="form-group"><label>Business owner</label><input type="text" id="brief-owner" value="${esc(state.ownerName)}" placeholder="e.g. Sarah Chen" onchange="window._briefMeta('ownerName',this.value)"><a style="font-size:11px;color:var(--text2);cursor:pointer;margin-top:4px;display:block" onclick="document.getElementById('brief-owner').value='';window._briefMeta('ownerName','');document.getElementById('brief-role').focus()">Skip for now</a></div>
+          <div class="form-group"><label>Role</label><input type="text" id="brief-role" value="${esc(state.ownerRole)}" placeholder="e.g. Head of Settlement" onchange="window._briefMeta('ownerRole',this.value)"><a style="font-size:11px;color:var(--text2);cursor:pointer;margin-top:4px;display:block" onclick="document.getElementById('brief-role').value='';window._briefMeta('ownerRole','')">Skip for now</a></div>
         </div>
         <p style="color:var(--text2);margin-bottom:16px;font-size:12px">This records who the requirement came from for the audit trail.</p>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Describe in one or two sentences what you want the AI to do.</p>
@@ -242,13 +256,13 @@
       html += '<div></div>';
     }
     if (step < TOTAL_STEPS) {
-      const canSkip = step >= 2 && step <= 4;
+      const canSkip = step >= 2 && step <= 5;
       const disabledStyle = valid ? '' : (canSkip ? '' : 'opacity:0.4;cursor:not-allowed;pointer-events:none');
-      html += '<div style="display:flex;align-items:center;gap:12px">';
-      if (canSkip && !valid) {
-        html += `<a style="font-size:13px;color:var(--text2);cursor:pointer;text-decoration:underline" onclick="window._briefSkipStep()">Skip this step</a>`;
-      }
+      html += '<div style="display:flex;align-items:center;gap:16px">';
       html += `<button class="btn btn-gold" id="brief-next-btn" style="padding:12px 0;width:${step > 1 ? '120px' : '100%'};justify-content:center;font-size:15px;${disabledStyle}" onclick="window._briefNext()">Next</button>`;
+      if (canSkip) {
+        html += `<a style="font-size:13px;color:var(--text2);cursor:pointer" onclick="window._briefSkipStep()">Skip for now</a>`;
+      }
       html += '</div>';
     } else {
       html += '<button class="btn btn-gold" style="padding:12px 0;width:120px;justify-content:center;font-size:15px" onclick="window._briefReview()">Review Brief</button>';
@@ -393,7 +407,7 @@
           <tr><td style="color:var(--text2);vertical-align:top">Audience</td><td>${esc(state.audience || '(not specified)')}</td></tr>
           <tr><td style="color:var(--text2);vertical-align:top">Constraints</td><td>${state.constraints.length ? state.constraints.map(c => esc(c)).join('<br>') : '(none selected)'}</td></tr>
           <tr><td style="color:var(--text2);vertical-align:top">Guardrails</td><td>${state.selectedGuardrails.length} dimensions selected</td></tr>
-          ${state.skipped.length ? '<tr><td style="color:var(--text2);vertical-align:top">Skipped</td><td>' + state.skipped.map(s => '<span class="badge badge-amber" style="margin-right:4px">' + esc(s.name) + '</span>').join('') + '</td></tr>' : ''}
+          ${state.skipped.length ? '<tr><td style="color:var(--text2);vertical-align:top">Skipped</td><td>' + state.skipped.map(s => '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="badge badge-amber">' + esc(s.name) + '</span><span style="font-size:12px;color:var(--text2)">Adding this would improve prompt quality.</span><a style="font-size:12px;color:var(--accent);cursor:pointer" onclick="window._briefJumpToStep(' + s.step + ')">Complete now</a></div>').join('') + '</td></tr>' : ''}
         </table>
       </div>`;
 
@@ -470,14 +484,25 @@
 
   // Exposed handlers
   window._briefMeta = function (field, val) { state[field] = val; };
+  window._briefJumpToStep = function (n) {
+    state.skipped = state.skipped.filter(s => s.step !== n);
+    step = n;
+    validationError = ''; validationResult = null;
+    renderStep();
+  };
   window._briefSkipStep = async function () {
     saveStepState();
+    const skippedStep = step;
     const skippedName = STEP_NAMES[step - 1] || 'Step ' + step;
-    state.skipped.push({ step, name: skippedName, timestamp: new Date().toISOString() });
+    state.skipped.push({ step: skippedStep, name: skippedName, timestamp: new Date().toISOString() });
     validationError = ''; validationResult = null; tier3Count = 0;
     step++;
     await updateScore();
     await saveBriefToServer();
+    // Log skip to audit trail
+    if (briefId) {
+      api('/briefs/' + briefId + '/skip-step/' + skippedStep, { method: 'POST' }).catch(() => {});
+    }
     if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
     else renderStep();
     toast('Skipped: ' + skippedName);
@@ -577,8 +602,9 @@
     try {
       briefScore = await api('/prompts/briefs/score', { method: 'POST', body: {
         purpose: state.purpose, input_type: state.inputType, output_type: state.outputType,
-        audience: state.audience, constraints: state.constraints, skipped: state.skipped,
+        audience: state.audience, constraints: state.constraints,
         deployment_target: inferDeployTarget(),
+        skipped_steps: state.skipped.map(s => s.step),
       }});
     } catch (e) { /* score is optional */ }
   }
