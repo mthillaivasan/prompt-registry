@@ -1,4 +1,9 @@
+let _genAICompleted = false;
+let _cameFromBrief = false;
+
 viewInits.generator = function () {
+  _genAICompleted = false;
+  _cameFromBrief = false;
   const el = document.getElementById('view-generator');
   el.innerHTML = `
     <h2 style="margin-bottom:20px">Create New Prompt</h2>
@@ -54,11 +59,12 @@ viewInits.generator = function () {
         </div>
       </div>
       <div class="form-group">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <label style="margin-bottom:0">Prompt Text</label>
-          <button class="btn btn-outline btn-sm" id="gen-ai-btn" onclick="genAI()" title="Generate prompt text using Claude AI based on the title, type, and fields above">Generate with AI</button>
+        <label style="margin-bottom:8px">Prompt Text</label>
+        <div id="gen-ai-section" style="margin-bottom:12px">
+          <button class="btn btn-primary" id="gen-ai-btn" onclick="genAI()" style="padding:12px 24px;font-size:15px">Generate with AI</button>
+          <span id="gen-ai-hint" style="margin-left:12px;font-size:13px;color:var(--text2)"></span>
         </div>
-        <textarea id="gen-text" rows="10" placeholder="Write the full prompt text here, or click Generate with AI to create one from the fields above..."></textarea>
+        <textarea id="gen-text" rows="10" placeholder="Click Generate with AI above, or write the prompt text manually..."></textarea>
       </div>
       <div class="form-group"><label>Change Summary (optional)</label>
         <input type="text" id="gen-summary" placeholder="e.g. Initial version">
@@ -69,11 +75,43 @@ viewInits.generator = function () {
           <input type="checkbox" id="gen-auto-compliance" checked> Run compliance check automatically
         </label>
       </div>
+      <p id="gen-save-hint" style="display:none;color:var(--amber);font-size:13px;margin-top:8px">Click Generate with AI first to create proper prompt text from your brief.</p>
     </div>
     <div id="gen-result"></div>`;
+
+  // Check if Brief Builder pre-filled — defer to allow _briefSend to run
+  setTimeout(() => {
+    if (window._briefPrefilled) {
+      _cameFromBrief = true;
+      _genAICompleted = false;
+      window._briefPrefilled = false;
+      updateSaveState();
+    }
+  }, 200);
 };
 
+function updateSaveState() {
+  const btn = document.getElementById('gen-submit');
+  const hint = document.getElementById('gen-save-hint');
+  if (!btn) return;
+  if (_cameFromBrief && !_genAICompleted) {
+    btn.style.opacity = '0.4';
+    btn.style.cursor = 'not-allowed';
+    btn.style.pointerEvents = 'none';
+    if (hint) hint.style.display = 'block';
+  } else {
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    btn.style.pointerEvents = 'auto';
+    if (hint) hint.style.display = 'none';
+  }
+}
+
 async function genSubmit() {
+  if (_cameFromBrief && !_genAICompleted) {
+    toast('Click Generate with AI first to create proper prompt text', 'error');
+    return;
+  }
   const btn = document.getElementById('gen-submit');
   const resultEl = document.getElementById('gen-result');
   const title = document.getElementById('gen-title').value.trim();
@@ -121,7 +159,7 @@ async function genSubmit() {
           <p style="color:var(--green);margin-bottom:8px">Prompt saved successfully: <strong>${esc(prompt.title)}</strong></p>
           <p style="font-size:13px;color:var(--text2)">ID: ${prompt.prompt_id} &mdash; v1 created</p>
           <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="navigate('detail',{promptId:'${prompt.prompt_id}'})">View Detail</button>
-      <button class="btn btn-outline btn-sm" style="margin-top:8px;margin-left:8px" onclick="navigate('dashboard')">Back to Dashboard</button>
+          <button class="btn btn-outline btn-sm" style="margin-top:8px;margin-left:8px" onclick="navigate('dashboard')">Back to Dashboard</button>
         </div>
         <div class="card">
           <div class="card-header">
@@ -160,7 +198,9 @@ async function genAI() {
   if (!title) { toast('Enter a title first so the AI knows what to generate', 'error'); return; }
   const btn = document.getElementById('gen-ai-btn');
   const textarea = document.getElementById('gen-text');
+  const hint = document.getElementById('gen-ai-hint');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating...';
+  if (hint) hint.textContent = 'Calling Claude API — this takes 10-30 seconds...';
   try {
     const body = {
       title,
@@ -170,18 +210,22 @@ async function genAI() {
       output_type: document.getElementById('gen-output').value || '',
       brief_text: textarea.value.trim(),
     };
-    // If Brief Builder passed selected guardrails, include them
     if (window._briefSelectedGuardrails && window._briefSelectedGuardrails.length) {
       body.selected_guardrails = window._briefSelectedGuardrails;
-      window._briefSelectedGuardrails = null; // consume once
+      window._briefSelectedGuardrails = null;
     }
     const resp = await api('/prompts/generate', { method: 'POST', body });
     textarea.value = resp.prompt_text;
     textarea.style.height = 'auto';
     textarea.style.height = textarea.scrollHeight + 'px';
+    _genAICompleted = true;
+    updateSaveState();
+    if (hint) hint.textContent = 'Generated — review the text below and edit if needed, then click Create Prompt.';
+    hint.style.color = 'var(--green)';
     toast('Prompt generated — review and edit before saving');
   } catch (e) {
     toast(e.message, 'error');
+    if (hint) { hint.textContent = 'Generation failed: ' + e.message; hint.style.color = 'var(--red)'; }
   } finally {
     btn.disabled = false; btn.innerHTML = 'Generate with AI';
   }

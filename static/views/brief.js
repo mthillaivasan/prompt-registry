@@ -362,7 +362,8 @@
       }
 
       window._briefSelectedGuardrails = guardrails;
-      toast('Brief loaded into Generator — click Generate with AI');
+      window._briefPrefilled = true;
+      toast('Brief loaded — now click Generate with AI to create the prompt');
     }, 100);
   };
 
