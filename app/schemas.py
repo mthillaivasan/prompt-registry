@@ -117,8 +117,13 @@ class ValidateBriefRequest(BaseModel):
 
 
 class ValidateBriefResponse(BaseModel):
+    tier: int  # 1=strong, 2=workable, 3=needs refinement
     accepted: bool
     question: str | None = None
+    options: list[str] | None = None
+    free_text_placeholder: str | None = None
+    suggestion: str | None = None
+    suggested_addition: str | None = None
 
 
 # ── Compliance schemas ───────────────────────────────────────────────────────

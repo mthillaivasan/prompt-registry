@@ -217,33 +217,35 @@ def update_prompt(
 # ── Validate brief description via Claude ────────────────────────────────────
 
 _VALIDATE_BRIEF_PROMPT = """\
-You are a quality gate for an AI prompt brief in a regulated financial services firm. \
-Reject any input that is vague, generic, or incomplete.
+You are a helpful coaching assistant reviewing an AI prompt brief for a \
+regulated financial services firm. Assess the quality of this description \
+and classify it into one of three tiers.
 
 The user has provided this description:
 "{user_input}"
 
-REJECT if the purpose:
-- Is fewer than 8 words
-- Does not name a specific document type, process, or data source
-- Does not indicate what the output will be used for
-- Contains only generic words like: summarise, analyse, process, help, review, check, document
+TIER 1 — Strong brief. The description names a specific document type or \
+data source, describes what the AI should produce, and indicates who uses \
+the result. Return JSON: {{"tier": 1}}
 
-Examples that must be REJECTED:
-- "summarise documents"
-- "summarise the document"
-- "help with compliance"
-- "analyse data"
-- "process forms"
+TIER 2 — Workable brief. The description is usable but could be improved \
+with one specific addition. Return JSON:
+{{"tier": 2, "suggestion": "one sentence explaining the improvement", \
+"suggested_addition": "the specific phrase to add"}}
 
-Examples that must be ACCEPTED:
-- "summarise FINMA circulars into plain language for operations staff who need to identify immediate obligations"
-- "extract subscription cut-off times from fund prospectus documents for operations settlement team"
+TIER 3 — Too vague. The description is fewer than 8 words, uses only \
+generic terms (summarise, analyse, process, help, review, check, document), \
+or does not name any specific input type. Return JSON:
+{{"tier": 3, "question": "one specific clarifying question", \
+"options": ["option1", "option2", "option3", "option4", "option5", "option6"], \
+"free_text_placeholder": "Or describe..."}}
 
-If REJECTED respond with exactly:
-QUESTION: [one specific question addressing the most important missing detail]
+The options must be relevant domain-specific choices for the question asked.
 
-If ACCEPTED respond with exactly: ACCEPTED"""
+Most descriptions should be Tier 1 or Tier 2. Only use Tier 3 when the \
+input is genuinely too vague to generate any useful prompt.
+
+Return ONLY valid JSON. No preamble."""
 
 
 @router.post("/validate-brief", response_model=ValidateBriefResponse)
@@ -257,19 +259,32 @@ def validate_brief(
         client = anthropic.Anthropic()
         response = client.messages.create(
             model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
-            max_tokens=256,
+            max_tokens=512,
             messages=[{"role": "user", "content": prompt_text}],
         )
-        result = response.content[0].text.strip()
-        if result.startswith("ACCEPTED"):
-            return ValidateBriefResponse(accepted=True, question=None)
-        elif result.startswith("QUESTION:"):
-            question = result[len("QUESTION:"):].strip()
-            return ValidateBriefResponse(accepted=False, question=question)
+        raw = response.content[0].text.strip()
+        if raw.startswith("```"):
+            lines = raw.split("\n")
+            raw = "\n".join(lines[1:-1])
+        parsed = json.loads(raw)
+        tier = parsed.get("tier", 1)
+        if tier == 1:
+            return ValidateBriefResponse(tier=1, accepted=True)
+        elif tier == 2:
+            return ValidateBriefResponse(
+                tier=2, accepted=True,
+                suggestion=parsed.get("suggestion"),
+                suggested_addition=parsed.get("suggested_addition"),
+            )
         else:
-            return ValidateBriefResponse(accepted=False, question=result)
-    except Exception as e:
-        return ValidateBriefResponse(accepted=True, question=None)
+            return ValidateBriefResponse(
+                tier=3, accepted=False,
+                question=parsed.get("question"),
+                options=parsed.get("options"),
+                free_text_placeholder=parsed.get("free_text_placeholder"),
+            )
+    except Exception:
+        return ValidateBriefResponse(tier=1, accepted=True)
 
 
 # ── Generate prompt text via Claude ──────────────────────────────────────────

@@ -3,6 +3,7 @@
   const TOTAL_STEPS = 6;
   let step = 1;
   let validationError = '';
+  let validationResult = null; // stores the full API response for tier 2/3 rendering
   const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [] };
   let guardrailData = null;
 
@@ -23,6 +24,7 @@
     step = 1; validationError = '';
     state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
     state.constraints = []; state.selectedGuardrails = [];
+    validationResult = null;
     guardrailData = null;
     renderStep();
   };
@@ -55,24 +57,42 @@
     if (step === 1) {
       const charCount = state.purpose.length;
       const isValid = charCount >= 20;
-      const borderColor = validationError && !isValid ? 'var(--red)' : 'var(--border)';
       html += `<h3 style="margin-bottom:12px">What does this prompt need to do?</h3>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Describe in one or two sentences what you want the AI to do.</p>
         <div class="form-group">
-          <textarea id="brief-purpose" rows="4" style="border-color:${borderColor}" oninput="window._briefPurposeInput(this.value)" placeholder="e.g. Summarise incoming customer complaints and flag any that mention regulatory obligations or potential liability.">${esc(state.purpose)}</textarea>
+          <textarea id="brief-purpose" rows="4" oninput="window._briefPurposeInput(this.value)" placeholder="e.g. Summarise incoming customer complaints and flag any that mention regulatory obligations or potential liability.">${esc(state.purpose)}</textarea>
           <div style="display:flex;justify-content:flex-end;margin-top:6px">
             <span class="mono" style="font-size:12px;color:${isValid ? 'var(--green)' : 'var(--text2)'}">${charCount}/20 ${isValid ? '&#10003;' : 'min'}</span>
           </div>
         </div>`;
-      if (validationError) {
-        if (!isValid) {
-          html += `<p style="color:var(--red);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
-        } else {
-          html += `<div style="background:var(--surface2);border-left:3px solid var(--amber);padding:12px 16px;border-radius:0 6px 6px 0;margin-top:8px">
-            <div style="font-size:12px;color:var(--amber);margin-bottom:4px;font-weight:600">More detail needed</div>
-            <p style="font-size:14px;color:var(--text);margin:0">${esc(validationError)}</p>
-          </div>`;
-        }
+      if (validationError && !isValid) {
+        html += `<p style="color:var(--amber);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
+      }
+      // Tier 2 — suggestion card
+      if (validationResult && validationResult.tier === 2) {
+        html += `<div style="background:var(--surface2);border-left:3px solid var(--accent);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
+          <div style="font-size:13px;color:var(--accent);margin-bottom:6px;font-weight:600">One suggestion</div>
+          <p style="font-size:14px;color:var(--text);margin:0 0 10px">${esc(validationResult.suggestion || '')}</p>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-gold btn-sm" onclick="window._briefUseSuggestion()">Use this addition</button>
+            <button class="btn btn-outline btn-sm" onclick="window._briefSkipSuggestion()">Continue as is</button>
+          </div>
+        </div>`;
+      }
+      // Tier 3 — question with options
+      if (validationResult && validationResult.tier === 3) {
+        html += `<div style="background:var(--surface2);border-left:3px solid var(--amber);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
+          <div style="font-size:15px;color:var(--text);margin-bottom:10px;font-family:var(--font-heading)">${esc(validationResult.question || 'Help me understand this better')}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">`;
+        (validationResult.options || []).forEach(opt => {
+          html += `<button class="btn btn-outline btn-sm" onclick="window._briefPickOption('${esc(opt)}')">${esc(opt)}</button>`;
+        });
+        html += `</div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="brief-tier3-free" style="flex:1" placeholder="${esc(validationResult.free_text_placeholder || 'Or type your answer...')}">
+            <button class="btn btn-gold btn-sm" onclick="window._briefSubmitFree()">Continue with this</button>
+          </div>
+        </div>`;
       }
     } else if (step === 2) {
       html += `<h3 style="margin-bottom:12px">What goes in?</h3>
@@ -308,35 +328,68 @@
   window._briefPurposeInput = function (val) {
     state.purpose = val;
     validationError = '';
-    // Live-update the Next button and char count without full re-render
+    validationResult = null;
     const btn = document.getElementById('brief-next-btn');
     if (btn) {
       if (val.length >= 20) { btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.style.pointerEvents = 'auto'; }
       else { btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; btn.style.pointerEvents = 'none'; }
     }
   };
-  window._briefPrev = function () { saveStepState(); validationError = ''; step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
+  window._briefUseSuggestion = function () {
+    if (validationResult && validationResult.suggested_addition) {
+      state.purpose = state.purpose.trim() + ' ' + validationResult.suggested_addition;
+    }
+    validationResult = null; validationError = '';
+    step++; renderStep();
+  };
+  window._briefSkipSuggestion = function () {
+    validationResult = null; validationError = '';
+    step++; renderStep();
+  };
+  window._briefPickOption = function (opt) {
+    state.purpose = state.purpose.trim() + ' — ' + opt;
+    validationResult = null; validationError = '';
+    // Re-validate with the enriched purpose
+    renderStep();
+    window._briefNext();
+  };
+  window._briefSubmitFree = function () {
+    const el = document.getElementById('brief-tier3-free');
+    const val = el ? el.value.trim() : '';
+    if (!val) { toast('Enter an answer or tap an option above', 'error'); return; }
+    state.purpose = state.purpose.trim() + ' — ' + val;
+    validationResult = null; validationError = '';
+    renderStep();
+    window._briefNext();
+  };
+  window._briefPrev = function () { saveStepState(); validationError = ''; validationResult = null; step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
   window._briefNext = async function () {
     saveStepState();
     if (!isStepValid()) { validationError = getValidationHint(); renderStep(); return; }
 
-    // Validate Step 1 description via Claude
     if (step === 1) {
       const btn = document.getElementById('brief-next-btn');
       if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Checking...'; }
       try {
         const resp = await api('/prompts/validate-brief', { method: 'POST', body: { description: state.purpose } });
-        if (!resp.accepted && resp.question) {
-          validationError = resp.question;
+        validationResult = resp;
+        if (resp.tier === 1) {
+          // Strong — proceed
+        } else if (resp.tier === 2) {
+          // Workable — show suggestion, let user choose
+          renderStep();
+          return;
+        } else {
+          // Too vague — show question with options
           renderStep();
           return;
         }
       } catch (e) {
-        // If validation fails (network/API error), let the user proceed
+        // On API failure, proceed silently
       }
     }
 
-    validationError = '';
+    validationError = ''; validationResult = null;
     step++;
     if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
     else renderStep();
