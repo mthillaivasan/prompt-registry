@@ -35,24 +35,44 @@
     validationResult = null; tier3Count = 0; briefScore = null; restructuredBrief = null; useRestructured = true;
     guardrailData = null; briefId = null;
 
-    // Resume existing brief
-    if (params && params.briefId) {
+    // Resume existing brief — from params or localStorage
+    const resumeId = (params && params.briefId) || localStorage.getItem('pr_active_brief');
+    if (resumeId && !(params && params.startNew)) {
       try {
-        const b = await api('/briefs/' + params.briefId);
-        briefId = b.brief_id;
-        step = b.step_progress || 1;
-        state.clientName = b.client_name || '';
-        state.ownerName = b.business_owner_name || '';
-        state.ownerRole = b.business_owner_role || '';
-        briefScore = b.quality_score ? { score: b.quality_score, label: '', weakest_dimension: '', improvement_tip: '' } : null;
-        const answers = JSON.parse(b.step_answers || '{}');
-        state.purpose = answers.purpose || '';
-        state.inputType = answers.inputType || '';
-        state.outputType = answers.outputType || '';
-        state.audience = answers.audience || '';
-        state.constraints = answers.constraints || [];
-        state.selectedGuardrails = JSON.parse(b.selected_guardrails || '[]');
-      } catch (e) { /* start fresh */ }
+        const b = await api('/briefs/' + resumeId);
+        if (b.status === 'In Progress') {
+          // Show resume prompt if coming from nav (not from dashboard Continue)
+          if (!params || !params.briefId) {
+            const el = document.getElementById('view-brief');
+            el.innerHTML = `<div class="card" style="max-width:500px;margin:60px auto;text-align:center">
+              <h3 style="margin-bottom:12px">You have an unfinished brief</h3>
+              <p style="color:var(--text2);margin-bottom:8px">${esc(b.client_name || 'Untitled')} — Step ${b.step_progress}/6</p>
+              <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Last updated ${timeAgo(b.updated_at)}</p>
+              <div style="display:flex;gap:12px;justify-content:center">
+                <button class="btn btn-gold" onclick="navigate('brief',{briefId:'${b.brief_id}'})">Continue Brief</button>
+                <button class="btn btn-outline" onclick="navigate('brief',{startNew:true})">Start New</button>
+              </div>
+            </div>`;
+            return;
+          }
+          briefId = b.brief_id;
+          step = b.step_progress || 1;
+          state.clientName = b.client_name || '';
+          state.ownerName = b.business_owner_name || '';
+          state.ownerRole = b.business_owner_role || '';
+          briefScore = b.quality_score ? { score: b.quality_score, label: '', weakest_dimension: '', improvement_tip: '' } : null;
+          const answers = JSON.parse(b.step_answers || '{}');
+          state.purpose = answers.purpose || '';
+          state.inputType = answers.inputType || '';
+          state.outputType = answers.outputType || '';
+          state.audience = answers.audience || '';
+          state.constraints = answers.constraints || [];
+          state.selectedGuardrails = JSON.parse(b.selected_guardrails || '[]');
+          localStorage.setItem('pr_active_brief', briefId);
+        }
+      } catch (e) {
+        localStorage.removeItem('pr_active_brief');
+      }
     }
     renderStep();
   };
@@ -119,6 +139,7 @@
           <div class="form-group"><label>Business owner</label><input type="text" id="brief-owner" value="${esc(state.ownerName)}" placeholder="e.g. Sarah Chen" onchange="window._briefMeta('ownerName',this.value)"></div>
           <div class="form-group"><label>Role</label><input type="text" id="brief-role" value="${esc(state.ownerRole)}" placeholder="e.g. Head of Settlement" onchange="window._briefMeta('ownerRole',this.value)"></div>
         </div>
+        <p style="color:var(--text2);margin-bottom:16px;font-size:12px">This records who the requirement came from for the audit trail.</p>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Describe in one or two sentences what you want the AI to do.</p>
         <div class="form-group">
           <textarea id="brief-purpose" rows="4" oninput="window._briefPurposeInput(this.value)" placeholder="e.g. Summarise incoming customer complaints and flag any that mention regulatory obligations or potential liability.">${esc(state.purpose)}</textarea>
@@ -434,7 +455,8 @@
         }});
         briefId = created.brief_id;
       }
-      await api('/briefs/' + briefId, { method: 'PATCH', body });
+      localStorage.setItem('pr_active_brief', briefId);
+      await api('/briefs/' + briefId + '/step/' + step, { method: 'PATCH', body });
     } catch (e) { console.warn('Brief save failed:', e.message); }
   }
 
@@ -559,6 +581,11 @@
 
   window._briefSend = function () {
     const guardrails = [...state.selectedGuardrails];
+    // Mark brief as complete and clear active brief
+    if (briefId) {
+      api('/briefs/' + briefId + '/complete', { method: 'POST' }).catch(() => {});
+    }
+    localStorage.removeItem('pr_active_brief');
     navigate('generator');
     setTimeout(() => {
       const title = document.getElementById('gen-title');

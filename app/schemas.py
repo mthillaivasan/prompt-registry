@@ -181,6 +181,7 @@ class BriefOut(BaseModel):
     business_owner_name: str | None
     business_owner_role: str | None
     brief_builder_id: str
+    interviewer_id: str | None
     step_answers: str
     selected_guardrails: str
     restructured_brief: str | None

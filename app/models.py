@@ -337,6 +337,7 @@ class Brief(Base):
     business_owner_name = Column(String, nullable=True)
     business_owner_role = Column(String, nullable=True)
     brief_builder_id = Column(String(36), ForeignKey("users.user_id"), nullable=False)
+    interviewer_id = Column(String(36), ForeignKey("users.user_id"), nullable=True)
     step_answers = Column(Text, nullable=False, default="{}")
     selected_guardrails = Column(Text, nullable=False, default="[]")
     restructured_brief = Column(Text, nullable=True)

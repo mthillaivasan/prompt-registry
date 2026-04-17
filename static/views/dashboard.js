@@ -48,9 +48,9 @@ function renderDashContent(prompts, briefs) {
       const qualityLabel = b.quality_score >= 80 ? 'Gold standard' : b.quality_score >= 60 ? 'Strong' : b.quality_score >= 40 ? 'Reasonable' : 'Weak';
       const dots = Array.from({length: 6}, (_, i) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${i < b.step_progress ? 'var(--accent)' : 'var(--border)'}"></span>`).join('');
       const ownerLine = b.business_owner_name ? esc(b.business_owner_name) + (b.business_owner_role ? ', ' + esc(b.business_owner_role) : '') : '—';
-      html += `<div class="card" style="cursor:pointer;border-color:var(--border);transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="navigate('brief',{briefId:'${b.brief_id}'})">
+      html += `<div class="card" style="cursor:pointer;border:1px dashed #252535;transition:border-color .15s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='#252535'" onclick="navigate('brief',{briefId:'${b.brief_id}'})">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <span class="badge badge-gold" style="font-size:11px">IN BRIEF</span>
+          <span class="badge badge-purple" style="font-size:11px">IN BRIEF</span>
           <span style="display:flex;align-items:center;gap:4px">${dots}<span class="mono" style="font-size:11px;color:var(--text2);margin-left:4px">Step ${b.step_progress}/6</span></span>
         </div>
         <h3 style="font-size:16px;margin-bottom:10px">${esc(title)}</h3>

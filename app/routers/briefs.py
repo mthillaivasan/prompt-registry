@@ -26,6 +26,7 @@ def create_brief(
 ):
     brief = Brief(
         brief_builder_id=current_user.user_id,
+        interviewer_id=current_user.user_id,
         client_name=body.client_name,
         business_owner_name=body.business_owner_name,
         business_owner_role=body.business_owner_role,
@@ -110,6 +111,42 @@ def update_brief(
         entity_id=brief.brief_id,
         detail=json.dumps({"step": brief.step_progress}),
     ))
+    db.commit()
+    db.refresh(brief)
+    return BriefOut.model_validate(brief)
+
+
+@router.patch("/{brief_id}/step/{step_num}", response_model=BriefOut)
+def save_step(
+    brief_id: str,
+    step_num: int,
+    body: BriefUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    brief = db.query(Brief).filter(Brief.brief_id == brief_id).first()
+    if not brief:
+        raise HTTPException(status_code=404, detail="Brief not found")
+    if brief.status not in ("In Progress",):
+        raise HTTPException(status_code=409, detail="Brief is finalised")
+
+    if body.step_answers is not None:
+        existing = json.loads(brief.step_answers or "{}")
+        existing.update(body.step_answers)
+        brief.step_answers = json.dumps(existing)
+    if body.quality_score is not None:
+        brief.quality_score = body.quality_score
+    if body.selected_guardrails is not None:
+        brief.selected_guardrails = json.dumps(body.selected_guardrails)
+    if body.client_name is not None:
+        brief.client_name = body.client_name
+    if body.business_owner_name is not None:
+        brief.business_owner_name = body.business_owner_name
+    if body.business_owner_role is not None:
+        brief.business_owner_role = body.business_owner_role
+
+    brief.step_progress = max(brief.step_progress, step_num)
+    brief.updated_at = _utcnow()
     db.commit()
     db.refresh(brief)
     return BriefOut.model_validate(brief)
