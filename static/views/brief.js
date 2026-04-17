@@ -74,8 +74,9 @@
         <div style="display:flex;flex-direction:column;gap:0">`;
       CONSTRAINT_OPTIONS.forEach(opt => {
         const checked = state.constraints.includes(opt) ? 'checked' : '';
-        html += `<label style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);font-size:14px;color:var(--text);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
-          <input type="checkbox" style="width:18px;height:18px;flex-shrink:0" ${checked} onchange="window._briefToggle('${esc(opt)}',this.checked)"> ${esc(opt)}
+        html += `<label style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #2e2e2e;cursor:pointer;width:100%" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
+          <input type="checkbox" style="width:20px;height:20px;flex-shrink:0" ${checked} onchange="window._briefToggle('${esc(opt)}',this.checked)">
+          <span style="font-size:14px;color:var(--text)">${esc(opt)}</span>
         </label>`;
       });
       html += '</div>';
