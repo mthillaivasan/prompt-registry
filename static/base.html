@@ -161,8 +161,14 @@ function isTokenValid(token) {
 }
 
 async function api(path, opts = {}) {
+  // Re-read token from localStorage in case it was refreshed in another tab
+  authToken = localStorage.getItem('pr_token');
+  if (!isTokenValid(authToken)) {
+    doLogout();
+    throw new Error('Session expired — please log in again');
+  }
   const config = { headers: { 'Content-Type': 'application/json' }, ...opts };
-  if (authToken) config.headers['Authorization'] = 'Bearer ' + authToken;
+  config.headers['Authorization'] = 'Bearer ' + authToken;
   if (config.body && typeof config.body === 'object') config.body = JSON.stringify(config.body);
   const res = await fetch(path, config);
   if (res.status === 401) { doLogout(); throw new Error('Session expired'); }
@@ -554,11 +560,11 @@ function showHelpSection(id){document.querySelectorAll('.help-section').forEach(
 </div>
 </div>
 
-<script src="/static/views/dashboard.js?v=5"></script>
-<script src="/static/views/detail.js?v=5"></script>
-<script src="/static/views/generator.js?v=5"></script>
-<script src="/static/views/brief.js?v=5"></script>
-<script src="/static/views/import.js?v=5"></script>
-<script src="/static/views/audit.js?v=5"></script>
+<script src="/static/views/dashboard.js?v=6"></script>
+<script src="/static/views/detail.js?v=6"></script>
+<script src="/static/views/generator.js?v=6"></script>
+<script src="/static/views/brief.js?v=6"></script>
+<script src="/static/views/import.js?v=6"></script>
+<script src="/static/views/audit.js?v=6"></script>
 </body>
 </html>

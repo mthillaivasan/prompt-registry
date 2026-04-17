@@ -84,19 +84,22 @@ async function genSubmit() {
   resultEl.innerHTML = '';
 
   try {
-    const prompt = await api('/prompts', { method: 'POST', body: {
+    const createBody = {
       title,
       prompt_type: document.getElementById('gen-type').value,
-      deployment_target: document.getElementById('gen-deploy').value || 'Internal',
-      input_type: document.getElementById('gen-input').value || 'Plain text',
-      output_type: document.getElementById('gen-output').value || 'Plain text',
+      deployment_target: document.getElementById('gen-deploy').value || 'Claude',
+      input_type: document.getElementById('gen-input').value || 'Free text',
+      output_type: document.getElementById('gen-output').value || 'Executive narrative',
       risk_tier: document.getElementById('gen-risk').value,
       prompt_text: text,
       change_summary: document.getElementById('gen-summary').value || null,
-    }});
+    };
+    console.log('Creating prompt:', JSON.stringify(createBody));
+    const prompt = await api('/prompts', { method: 'POST', body: createBody });
+    console.log('Prompt created successfully:', prompt.prompt_id, prompt.title);
 
     let html = `<div class="card" style="border-color:var(--green)">
-      <p style="color:var(--green);margin-bottom:8px">Prompt created: <strong>${esc(prompt.title)}</strong></p>
+      <p style="color:var(--green);margin-bottom:8px">Prompt saved successfully: <strong>${esc(prompt.title)}</strong></p>
       <p style="font-size:13px;color:var(--text2)">ID: ${prompt.prompt_id} &mdash; v1 created</p>
       <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="navigate('detail',{promptId:'${prompt.prompt_id}'})">View Detail</button>
       <button class="btn btn-outline btn-sm" style="margin-top:8px;margin-left:8px" onclick="navigate('dashboard')">Back to Dashboard</button>
@@ -115,7 +118,7 @@ async function genSubmit() {
         const gc = gradeClass(r.gold_standard ? r.gold_standard.composite : null);
         const gradeVal = r.gold_standard ? Math.round(r.gold_standard.composite) : '-';
         html = `<div class="card" style="border-color:var(--green)">
-          <p style="color:var(--green);margin-bottom:8px">Prompt created: <strong>${esc(prompt.title)}</strong></p>
+          <p style="color:var(--green);margin-bottom:8px">Prompt saved successfully: <strong>${esc(prompt.title)}</strong></p>
           <p style="font-size:13px;color:var(--text2)">ID: ${prompt.prompt_id} &mdash; v1 created</p>
           <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="navigate('detail',{promptId:'${prompt.prompt_id}'})">View Detail</button>
       <button class="btn btn-outline btn-sm" style="margin-top:8px;margin-left:8px" onclick="navigate('dashboard')">Back to Dashboard</button>
