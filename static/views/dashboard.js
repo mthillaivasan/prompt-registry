@@ -17,7 +17,7 @@ viewInits.dashboard = async function () {
       </div>
       <div class="card" style="padding:0;overflow:hidden">
         <table><thead><tr>
-          <th>Title</th><th>Type</th><th>Risk Tier</th><th>Status</th><th>Updated</th>
+          <th>Title</th><th>Type</th><th>Risk Tier</th><th>Status</th><th>Updated</th><th></th>
         </tr></thead><tbody id="dash-tbody"></tbody></table>
       </div>`;
     const tbody = document.getElementById('dash-tbody');
@@ -27,6 +27,7 @@ viewInits.dashboard = async function () {
       const statusClass = p.status === 'Active' ? 'badge-green'
         : p.status === 'Draft' ? 'badge-blue'
         : p.status === 'Retired' ? 'badge-red' : 'badge-amber';
+      const pid = p.prompt_id;
       const tr = document.createElement('tr');
       tr.style.cursor = 'pointer';
       tr.innerHTML = `
@@ -34,8 +35,9 @@ viewInits.dashboard = async function () {
         <td>${esc(p.prompt_type)}</td>
         <td><span class="badge ${riskClass}">${esc(p.risk_tier)}</span></td>
         <td><span class="badge ${statusClass}">${esc(p.status)}</span></td>
-        <td style="color:var(--text2)">${timeAgo(p.updated_at)}</td>`;
-      tr.addEventListener('click', () => navigate('detail', { promptId: p.prompt_id }));
+        <td style="color:var(--text2)">${timeAgo(p.updated_at)}</td>
+        <td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();navigate('detail',{promptId:'${pid}'})">View</button></td>`;
+      tr.onclick = function() { navigate('detail', {promptId: pid}); };
       tbody.appendChild(tr);
     });
   } catch (err) {
