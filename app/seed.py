@@ -330,7 +330,7 @@ def _seed_admin(db: Session) -> None:
         user_id=_uuid(),
         email="admin@promptregistry.local",
         name="System Administrator",
-        role="SuperAdmin",
+        role="Admin",
         password_hash=_pwd.hash("ChangeMe123!"),
         is_active=True,
         created_at=_utcnow(),

@@ -324,14 +324,12 @@ function showHelpSection(id){document.querySelectorAll('.help-section').forEach(
 <table class="dim-table">
 <thead><tr><th>Role</th><th>Permissions</th></tr></thead>
 <tbody>
-<tr><td><strong>Author</strong></td><td>Create prompts, create versions, submit for compliance, respond to upgrade suggestions, request activation</td></tr>
-<tr><td><strong>Approver</strong></td><td>Everything Author can do, plus: activate/deactivate prompt versions, approve compliance results, sign off on high-risk prompts</td></tr>
-<tr><td><strong>Auditor</strong></td><td>Read-only access to all prompts, versions, compliance results, and the full audit log. Cannot create or modify.</td></tr>
-<tr><td><strong>Admin</strong></td><td>Full access including user management and scoring dimension configuration</td></tr>
-<tr><td><strong>SuperAdmin</strong></td><td>Admin plus system-level operations (seed data, trigger management, database maintenance)</td></tr>
+<tr><td><strong>Maker</strong></td><td>Create prompts, edit drafts, create versions, run compliance checks, submit for approval, respond to upgrade suggestions, view own prompts</td></tr>
+<tr><td><strong>Checker</strong></td><td>All Maker permissions plus: activate, retire, and suspend prompts, view all prompts, view full audit log, approve compliance checks for High risk prompts</td></tr>
+<tr><td><strong>Admin</strong></td><td>All Checker permissions plus: manage users, view platform configuration, access all settings, manage scoring dimensions</td></tr>
 </tbody>
 </table>
-<p>Role assignments are managed by Admin users. In the MVP, the seeded admin account has SuperAdmin privileges.</p>
+<p>Role assignments are managed by Admin users. In the MVP, the seeded admin account has Admin privileges.</p>
 </div>
 
 <div id="help-create" class="help-section">

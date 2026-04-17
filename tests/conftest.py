@@ -58,11 +58,11 @@ def client():
 
 @pytest.fixture
 def test_user(db):
-    """A standard Author user available in every HTTP test."""
+    """A standard Maker user available in every HTTP test."""
     user = User(
         email="author@test.local",
-        name="Test Author",
-        role="Author",
+        name="Test Maker",
+        role="Maker",
         password_hash=hash_password("authorpass"),
         is_active=True,
     )
@@ -76,8 +76,8 @@ def test_user(db):
 def second_user(db):
     user = User(
         email="approver@test.local",
-        name="Test Approver",
-        role="Approver",
+        name="Test Checker",
+        role="Checker",
         password_hash=hash_password("approverpass"),
         is_active=True,
     )
