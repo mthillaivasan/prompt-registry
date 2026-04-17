@@ -340,37 +340,32 @@ def validate_brief(
     prompt_text = _VALIDATE_BRIEF_PROMPT.replace("{user_input}", body.description)
     try:
         client = anthropic.Anthropic()
+        print(f"[Validation] Input: {body.description[:80]}")
         response = client.messages.create(
             model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
             max_tokens=512,
             messages=[{"role": "user", "content": prompt_text}],
         )
         raw = response.content[0].text.strip()
+        print(f"[Validation] Claude raw: {raw[:200]}")
         if raw.startswith("```"):
             lines = raw.split("\n")
             raw = "\n".join(lines[1:-1])
         parsed = json.loads(raw)
         tier = parsed.get("tier", 1)
+        print(f"[Validation] Tier: {tier}")
         if tier == 1:
             return ValidateBriefResponse(tier=1, accepted=True)
         elif tier == 2:
-            suggestion = parsed.get("suggestion", "")
-            if body.conversation_history and suggestion:
-                if _is_question_redundant(client, suggestion, body.conversation_history):
-                    return ValidateBriefResponse(tier=1, accepted=True)
             return ValidateBriefResponse(
                 tier=2, accepted=True,
-                suggestion=suggestion,
+                suggestion=parsed.get("suggestion"),
                 suggested_addition=parsed.get("suggested_addition"),
             )
         else:
-            question = parsed.get("question", "")
-            if body.conversation_history and question:
-                if _is_question_redundant(client, question, body.conversation_history):
-                    return ValidateBriefResponse(tier=1, accepted=True)
             return ValidateBriefResponse(
                 tier=3, accepted=False,
-                question=question,
+                question=parsed.get("question"),
                 options=parsed.get("options"),
                 free_text_placeholder=parsed.get("free_text_placeholder"),
             )

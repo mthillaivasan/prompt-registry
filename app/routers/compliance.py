@@ -194,24 +194,29 @@ def get_applicable_dimensions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    dims = compliance_engine.get_active_dimensions(db)
+    try:
+        dims = compliance_engine.get_active_dimensions(db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error loading dimensions: {str(e)}")
+
     tier1, tier2, tier3 = [], [], []
 
     for d in dims:
+        dim_tier = getattr(d, 'tier', 3) or 3
         entry = {
             "code": d.code,
             "name": d.name,
             "framework": d.framework,
             "description": d.description,
             "scoring_type": d.scoring_type,
-            "tier": d.tier,
+            "tier": dim_tier,
         }
-        if d.tier == 1:
+        if dim_tier == 1:
             tier1.append(entry)
-        elif d.tier == 2:
+        elif dim_tier == 2:
             reason = _check_tier2_trigger(d, deployment_target, input_type, risk_tier, prompt_text_snippet)
             entry["triggered"] = reason is not None
-            entry["trigger_reason"] = reason or d.tier2_trigger
+            entry["trigger_reason"] = reason or getattr(d, 'tier2_trigger', None) or ""
             tier2.append(entry)
         else:
             # Estimate score impact: removing one tier-3 dimension from the pool
