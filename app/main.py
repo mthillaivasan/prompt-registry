@@ -23,6 +23,7 @@ from app.models import (  # noqa: F401 — imports register all models with Base
     UpgradeProposal,
     User,
 )
+from app.migrations import run_migrations
 from app.routers import auth as auth_router
 from app.routers import briefs as briefs_router
 from app.routers import compliance as compliance_router
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
 
     try:
         Base.metadata.create_all(bind=engine)
+        run_migrations(engine)
         create_triggers_and_indexes(engine)
         run_seed()
         print("Startup initialization complete")

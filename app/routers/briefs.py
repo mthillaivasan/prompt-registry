@@ -57,8 +57,11 @@ def list_briefs(
     query = db.query(Brief).filter(Brief.brief_builder_id == current_user.user_id)
     if status_filter:
         query = query.filter(Brief.status == status_filter)
-    briefs = query.order_by(Brief.updated_at.desc()).all()
-    return [BriefOut.model_validate(b) for b in briefs]
+    try:
+        briefs = query.order_by(Brief.updated_at.desc()).all()
+        return [BriefOut.model_validate(b) for b in briefs]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 @router.get("/{brief_id}", response_model=BriefOut)

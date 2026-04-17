@@ -129,8 +129,11 @@ def list_prompts(
         query = query.filter(Prompt.owner_id == owner_id)
     if search:
         query = query.filter(Prompt.title.ilike(f"%{search}%"))
-    prompts = query.order_by(Prompt.updated_at.desc()).all()
-    return [PromptOut.model_validate(p) for p in prompts]
+    try:
+        prompts = query.order_by(Prompt.updated_at.desc()).all()
+        return [PromptOut.model_validate(p) for p in prompts]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 @router.get("/{prompt_id}", response_model=PromptDetail)
