@@ -614,42 +614,31 @@
     if (step === 1) {
       const btn = document.getElementById('brief-next-btn');
       if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Checking...'; }
+      console.log('[Brief] Step 1 Next clicked, purpose:', state.purpose.substring(0, 50));
       try {
-        const history = [];
-        if (state.purpose) history.push('Purpose: ' + state.purpose);
-        if (state.clientName) history.push('Client: ' + state.clientName);
-        if (state.ownerName) history.push('Owner: ' + state.ownerName);
-        if (state.inputType) history.push('Input type: ' + state.inputType);
-        if (state.outputType) history.push('Output type: ' + state.outputType);
-        if (state.audience) history.push('Audience: ' + state.audience);
-        if (state.constraints.length) history.push('Constraints: ' + state.constraints.join(', '));
         const resp = await api('/prompts/validate-brief', { method: 'POST', body: { description: state.purpose, conversation_history: window._briefConversation } });
+        console.log('[Brief] Validation response:', JSON.stringify(resp));
         validationResult = resp;
         if (resp.tier === 1) {
+          console.log('[Brief] Tier 1 — accepted, proceeding');
           window._briefConversation.push({ role: 'system', step, question: 'validation', answer: 'accepted', skipped: false });
         } else if (resp.tier === 2) {
-          // Check relevance before showing
-          try {
-            const rel = await api('/prompts/briefs/check-relevance', { method: 'POST', body: { conversation_history: window._briefConversation, proposed_question: resp.suggestion } });
-            if (rel.result === 'SKIP') { validationResult = null; /* proceed */ }
-            else { renderStep(); return; }
-          } catch (e) { renderStep(); return; }
+          console.log('[Brief] Tier 2 — showing suggestion:', resp.suggestion);
+          renderStep(); return;
         } else {
-          // Tier 3 — enforce 2-question max per step
           window._briefQuestionCount[step] = (window._briefQuestionCount[step] || 0) + 1;
           tier3Count = window._briefQuestionCount[step];
+          console.log('[Brief] Tier 3 — question count:', tier3Count, 'question:', resp.question);
           if (tier3Count > 2) {
-            validationResult = null; // max reached, accept and proceed
+            console.log('[Brief] Max questions reached, auto-accepting');
+            validationResult = null;
           } else {
-            // Check relevance before showing
-            try {
-              const rel = await api('/prompts/briefs/check-relevance', { method: 'POST', body: { conversation_history: window._briefConversation, proposed_question: resp.question } });
-              if (rel.result === 'SKIP') { validationResult = null; }
-              else { renderStep(); return; }
-            } catch (e) { renderStep(); return; }
+            renderStep(); return;
           }
         }
-      } catch (e) { /* proceed on failure */ }
+      } catch (e) {
+        console.warn('[Brief] Validation failed, proceeding:', e.message);
+      }
     }
 
     validationError = ''; validationResult = null; tier3Count = 0;
