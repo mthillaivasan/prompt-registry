@@ -1,23 +1,24 @@
 import os
 
-from fastapi import APIRouter, Depends
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-
-from app.database import get_db, get_db_info
+from fastapi import APIRouter
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-def health_check(db: Session = Depends(get_db)):
-    db.execute(text("SELECT 1"))
-    info = get_db_info()
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    return {
-        "status": "ok",
-        "database": info["type"],
-        "database_target": info["url_hint"],
-        "anthropic_key_set": bool(api_key),
-        "anthropic_key_prefix": api_key[:12] + "..." if len(api_key) > 12 else "(not set)",
-    }
+async def health():
+    try:
+        key = os.getenv("ANTHROPIC_API_KEY", "")
+        db_url = os.getenv("DATABASE_URL", "")
+        db_type = "Postgres" if "postgres" in db_url else "SQLite"
+        return {
+            "status": "ok",
+            "database": db_type,
+            "anthropic_key_set": bool(key),
+            "anthropic_key_prefix": key[:15] if key else "not set",
+        }
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "error": str(e),
+        }
