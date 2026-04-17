@@ -217,24 +217,33 @@ def update_prompt(
 # ── Validate brief description via Claude ────────────────────────────────────
 
 _VALIDATE_BRIEF_PROMPT = """\
-You are reviewing a brief for an AI prompt about to be built for a regulated \
-financial services firm.
+You are a quality gate for an AI prompt brief in a regulated financial services firm. \
+Reject any input that is vague, generic, or incomplete.
 
-The user has provided this description of the prompt's purpose:
+The user has provided this description:
 "{user_input}"
 
-Assess whether this description is specific enough to generate a high quality \
-governed prompt. It must clearly state:
-1. What the AI will process (the input)
-2. What the AI will produce (the output)
-3. What the human does with the result
+REJECT if the purpose:
+- Is fewer than 8 words
+- Does not name a specific document type, process, or data source
+- Does not indicate what the output will be used for
+- Contains only generic words like: summarise, analyse, process, help, review, check, document
 
-If all three are clear — respond with: ACCEPTED
-If any are missing or vague — respond with: QUESTION: [one specific \
-follow-up question that addresses the most important gap]
+Examples that must be REJECTED:
+- "summarise documents"
+- "summarise the document"
+- "help with compliance"
+- "analyse data"
+- "process forms"
 
-Do not ask more than one question at a time.
-Do not accept vague descriptions like "process documents" or "help with compliance"."""
+Examples that must be ACCEPTED:
+- "summarise FINMA circulars into plain language for operations staff who need to identify immediate obligations"
+- "extract subscription cut-off times from fund prospectus documents for operations settlement team"
+
+If REJECTED respond with exactly:
+QUESTION: [one specific question addressing the most important missing detail]
+
+If ACCEPTED respond with exactly: ACCEPTED"""
 
 
 @router.post("/validate-brief", response_model=ValidateBriefResponse)

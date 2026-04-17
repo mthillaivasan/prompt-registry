@@ -379,15 +379,13 @@
       if (input) input.value = state.inputType || input.value;
       if (output) output.value = state.outputType || output.value;
 
-      if (textarea) {
-        textarea.value = buildBriefText();
-        textarea.style.height = 'auto';
-        textarea.style.height = textarea.scrollHeight + 'px';
-      }
+      // Store brief text for the Generate API call, but do NOT put it in the textarea
+      window._briefTextForGenerate = buildBriefText();
+      if (textarea) textarea.value = '';
 
       window._briefSelectedGuardrails = guardrails;
       window._briefPrefilled = true;
-      toast('Brief loaded — now click Generate with AI to create the prompt');
+      toast('Brief loaded. Click Generate with AI to create your prompt.');
     }, 100);
   };
 

@@ -86,6 +86,11 @@ viewInits.generator = function () {
       _genAICompleted = false;
       window._briefPrefilled = false;
       updateSaveState();
+      // Show prominent brief loaded message
+      const hint = document.getElementById('gen-ai-hint');
+      if (hint) {
+        hint.innerHTML = '<strong style="color:var(--accent)">Brief loaded.</strong> Click Generate with AI to create your prompt.';
+      }
     }
   }, 200);
 };
@@ -208,8 +213,9 @@ async function genAI() {
       deployment_target: document.getElementById('gen-deploy').value || '',
       input_type: document.getElementById('gen-input').value || '',
       output_type: document.getElementById('gen-output').value || '',
-      brief_text: textarea.value.trim(),
+      brief_text: window._briefTextForGenerate || textarea.value.trim(),
     };
+    window._briefTextForGenerate = null; // consume once
     if (window._briefSelectedGuardrails && window._briefSelectedGuardrails.length) {
       body.selected_guardrails = window._briefSelectedGuardrails;
       window._briefSelectedGuardrails = null;
