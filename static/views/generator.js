@@ -99,6 +99,7 @@ async function genSubmit() {
       <p style="color:var(--green);margin-bottom:8px">Prompt created: <strong>${esc(prompt.title)}</strong></p>
       <p style="font-size:13px;color:var(--text2)">ID: ${prompt.prompt_id} &mdash; v1 created</p>
       <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="navigate('detail',{promptId:'${prompt.prompt_id}'})">View Detail</button>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;margin-left:8px" onclick="navigate('dashboard')">Back to Dashboard</button>
     </div>`;
 
     if (document.getElementById('gen-auto-compliance').checked && prompt.versions.length > 0) {
@@ -117,6 +118,7 @@ async function genSubmit() {
           <p style="color:var(--green);margin-bottom:8px">Prompt created: <strong>${esc(prompt.title)}</strong></p>
           <p style="font-size:13px;color:var(--text2)">ID: ${prompt.prompt_id} &mdash; v1 created</p>
           <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="navigate('detail',{promptId:'${prompt.prompt_id}'})">View Detail</button>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;margin-left:8px" onclick="navigate('dashboard')">Back to Dashboard</button>
         </div>
         <div class="card">
           <div class="card-header">

@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
@@ -16,6 +17,11 @@ if DATABASE_URL.startswith("postgres://"):
 
 _is_sqlite = "sqlite" in DATABASE_URL
 _using_fallback = False
+
+# Ensure SQLite parent directory exists
+if _is_sqlite:
+    db_path = DATABASE_URL.replace("sqlite:///", "")
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
 
 class Base(DeclarativeBase):

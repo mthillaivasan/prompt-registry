@@ -41,6 +41,7 @@ viewInits.dashboard = async function () {
       tbody.appendChild(tr);
     });
   } catch (err) {
-    el.innerHTML = '<div class="empty-state"><p style="color:var(--red)">' + esc(err.message) + '</p></div>';
+    console.error('Dashboard load error:', err);
+    el.innerHTML = '<div class="empty-state"><h3>Error loading prompts</h3><p style="color:var(--red)">' + esc(err.message) + '</p><p style="color:var(--text2);margin-top:8px">Check the browser console for details.</p></div>';
   }
 };
