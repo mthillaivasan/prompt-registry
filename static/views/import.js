@@ -96,10 +96,13 @@ function renderProposal(container, p) {
         : resp.response === 'Rejected' ? '<span class="badge badge-red">Rejected</span>'
         : '<span class="badge badge-amber">Modified</span>') : '<span class="badge badge-blue">Pending</span>';
       const imp = s.expected_score_improvement || {};
-      html += `<div class="suggestion-card" id="sug-${s.suggestion_id}">
+      const cardClass = has ? (resp.response === 'Accepted' ? 'accepted' : resp.response === 'Rejected' ? 'rejected' : 'modified') : '';
+      const fromDot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--red)"></span>`;
+      const toDot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green)"></span>`;
+      html += `<div class="suggestion-card ${cardClass}" id="sug-${s.suggestion_id}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div><strong>${esc(s.dimension_code)}</strong> &mdash; ${esc(s.description)} ${badge}</div>
-          <span style="font-size:12px;color:var(--text2)">${imp.from || '?'} &rarr; ${imp.to || '?'}</span>
+          <div><span class="mono" style="color:var(--amber);font-weight:600">${esc(s.dimension_code)}</span> &mdash; ${esc(s.description)} ${badge}</div>
+          <span style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px">${fromDot} ${imp.from || '?'} &rarr; ${toDot} ${imp.to || '?'}</span>
         </div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${esc(s.rationale)}</div>
         <div class="diff-add">${esc(s.suggested_text)}</div>`;

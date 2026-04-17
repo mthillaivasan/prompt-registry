@@ -60,8 +60,8 @@
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Describe in one or two sentences what you want the AI to do.</p>
         <div class="form-group">
           <textarea id="brief-purpose" rows="4" style="border-color:${borderColor}" oninput="window._briefPurposeInput(this.value)" placeholder="e.g. Summarise incoming customer complaints and flag any that mention regulatory obligations or potential liability.">${esc(state.purpose)}</textarea>
-          <div style="display:flex;justify-content:space-between;margin-top:6px">
-            <span style="font-size:12px;color:${isValid ? 'var(--green)' : 'var(--text2)'}">${charCount}/20 characters ${isValid ? '&#10003;' : 'minimum'}</span>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px">
+            <span class="mono" style="font-size:12px;color:${isValid ? 'var(--green)' : 'var(--text2)'}">${charCount}/20 ${isValid ? '&#10003;' : 'min'}</span>
           </div>
         </div>`;
       if (validationError) {
@@ -138,9 +138,9 @@
     }
     if (step < TOTAL_STEPS) {
       const disabledStyle = valid ? '' : 'opacity:0.4;cursor:not-allowed;pointer-events:none';
-      html += `<button class="btn btn-primary" id="brief-next-btn" style="${disabledStyle}" onclick="window._briefNext()">Next</button>`;
+      html += `<button class="btn btn-gold" id="brief-next-btn" style="padding:12px 0;width:${step > 1 ? '120px' : '100%'};justify-content:center;font-size:15px;${disabledStyle}" onclick="window._briefNext()">Next</button>`;
     } else {
-      html += '<button class="btn btn-primary" onclick="window._briefReview()">Review Brief</button>';
+      html += '<button class="btn btn-gold" style="padding:12px 0;width:120px;justify-content:center;font-size:15px" onclick="window._briefReview()">Review Brief</button>';
     }
     html += '</div>';
 

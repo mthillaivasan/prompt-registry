@@ -61,8 +61,8 @@ viewInits.generator = function () {
       <div class="form-group">
         <label style="margin-bottom:8px">Prompt Text</label>
         <div id="gen-ai-section" style="margin-bottom:12px">
-          <button class="btn btn-primary" id="gen-ai-btn" onclick="genAI()" style="padding:12px 24px;font-size:15px">Generate with AI</button>
-          <span id="gen-ai-hint" style="margin-left:12px;font-size:13px;color:var(--text2)"></span>
+          <button class="btn btn-gold" id="gen-ai-btn" onclick="genAI()" style="padding:14px 0;font-size:16px;width:100%;justify-content:center">Generate with AI</button>
+          <p id="gen-ai-hint" style="margin-top:8px;font-size:13px;color:var(--text2);text-align:center"></p>
         </div>
         <textarea id="gen-text" rows="10" placeholder="Click Generate with AI above, or write the prompt text manually..."></textarea>
       </div>
@@ -218,6 +218,7 @@ async function genAI() {
     textarea.value = resp.prompt_text;
     textarea.style.height = 'auto';
     textarea.style.height = textarea.scrollHeight + 'px';
+    textarea.style.borderLeft = '3px solid var(--teal)';
     _genAICompleted = true;
     updateSaveState();
     if (hint) hint.textContent = 'Generated — review the text below and edit if needed, then click Create Prompt.';
@@ -227,6 +228,6 @@ async function genAI() {
     toast(e.message, 'error');
     if (hint) { hint.textContent = 'Generation failed: ' + e.message; hint.style.color = 'var(--red)'; }
   } finally {
-    btn.disabled = false; btn.innerHTML = 'Generate with AI';
+    btn.disabled = false; btn.textContent = 'Generate with AI';
   }
 }

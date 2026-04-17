@@ -25,30 +25,40 @@ viewInits.detail = async function (params) {
     let html = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
         <div>
-          <h2>${esc(p.title)}</h2>
+          <h2 style="font-size:20px">${esc(p.title)}</h2>
           <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
             <span class="badge ${statusClass}">${esc(p.status)}</span>
             <span class="badge ${riskClass}">${esc(p.risk_tier)}</span>
             <span class="badge badge-purple">${esc(p.prompt_type)}</span>
-            <span class="badge badge-blue">${esc(p.deployment_target)}</span>
+            <span class="badge badge-gold">${esc(p.deployment_target)}</span>
           </div>
         </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-outline btn-sm" onclick="runComplianceDetail('${p.prompt_id}')">Run Compliance</button>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div id="detail-grade-badge"></div>
+          <button class="btn btn-gold btn-sm" onclick="runComplianceDetail('${p.prompt_id}')">Run Compliance</button>
         </div>
       </div>`;
 
-    // Prompt text display
-    html += `<div class="card">
-      <div class="card-header">
-        <span class="card-title" id="detail-version-label"></span>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-outline btn-sm" onclick="detailCopyPrompt()">Copy Prompt</button>
-          <button class="btn btn-outline btn-sm" onclick="detailEditAsNew('${p.prompt_id}')">Edit as New Version</button>
+    // Two-column layout: prompt text left, compliance panel right
+    html += '<div class="detail-columns">';
+
+    // Left column: prompt text
+    html += `<div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" id="detail-version-label"></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="detailCopyPrompt()">Copy</button>
+            <button class="btn btn-outline btn-sm" onclick="detailEditAsNew('${p.prompt_id}')">Edit as New Version</button>
+          </div>
         </div>
+        <div class="prompt-text" id="detail-prompt-text" style="min-height:300px"></div>
       </div>
-      <div class="prompt-text" id="detail-prompt-text" style="min-height:200px"></div>
     </div>`;
+
+    // Right column: compliance scores
+    html += '<div id="detail-compliance-panel"><div class="card"><div class="card-title" style="margin-bottom:12px">Compliance Scores</div><p style="color:var(--text2);font-size:13px">Run a compliance check to see scores.</p></div></div>';
+    html += '</div>'; // end detail-columns
 
     // Version history — open by default
     html += `<div class="card">

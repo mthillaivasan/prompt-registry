@@ -47,20 +47,25 @@
         return;
       }
 
-      let html = '<div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>Actor</th><th>Detail</th></tr></thead><tbody>';
-      entries.forEach(e => {
+      let html = '<div class="card" style="padding:12px 20px">';
+      entries.forEach((e, i) => {
         const ac = actionBadge(e.action);
-        const eid = e.entity_id ? e.entity_id.substring(0, 8) + '...' : '-';
-        const det = e.detail && e.detail.length > 100 ? e.detail.substring(0, 100) + '...' : (e.detail || '-');
-        html += `<tr>
-          <td style="white-space:nowrap;color:var(--text2);font-size:13px">${fmtTime(e.timestamp)}</td>
-          <td><span class="badge ${ac}">${esc(e.action)}</span></td>
-          <td style="font-size:13px"><span style="color:var(--text2)">${esc(e.entity_type || '')}</span><br><code style="font-size:11px;color:var(--accent)">${esc(eid)}</code></td>
-          <td style="font-size:13px">${esc(e.user_id || '')}</td>
-          <td style="font-size:13px;color:var(--text2);max-width:300px">${esc(det)}</td>
-        </tr>`;
+        const badgeColor = actionDotColor(e.action);
+        const eid = e.entity_id ? e.entity_id.substring(0, 8) : '-';
+        const det = e.detail && e.detail.length > 120 ? e.detail.substring(0, 120) + '...' : (e.detail || '');
+        html += `<div class="timeline-row" id="audit-row-${i}">
+          <div class="timeline-badge" style="background:${badgeColor}"></div>
+          <div class="timeline-content">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span class="timeline-action badge ${ac}">${esc(e.action)}</span>
+              <span class="mono" style="font-size:11px;color:var(--accent)">${esc(e.entity_type || '')}:${esc(eid)}</span>
+              <span class="timeline-time" style="margin-left:auto">${fmtTime(e.timestamp)}</span>
+            </div>
+            ${det ? '<div style="font-size:13px;color:var(--text2);cursor:pointer" onclick="this.style.whiteSpace=this.style.whiteSpace===\\'normal\\'?\\'nowrap\\':\\'normal\\'" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(det) + '</div>' : ''}
+          </div>
+        </div>`;
       });
-      html += '</tbody></table></div>';
+      html += '</div>';
       container.innerHTML = html;
 
       let pag = '';
@@ -75,10 +80,18 @@
 
   function actionBadge(a) {
     const map = { Created: 'badge-green', Edited: 'badge-amber', Activated: 'badge-green', Approved: 'badge-green',
-      Retired: 'badge-red', PromptImported: 'badge-blue', UpgradeProposed: 'badge-purple',
+      Retired: 'badge-red', PromptImported: 'badge-gold', UpgradeProposed: 'badge-purple',
       UpgradeResponseRecorded: 'badge-amber', UpgradeApplied: 'badge-green', UpgradeAbandoned: 'badge-red',
-      InjectionDetected: 'badge-red', ComplianceChecked: 'badge-blue' };
-    return map[a] || 'badge-blue';
+      InjectionDetected: 'badge-red', ComplianceChecked: 'badge-gold', PromptGenerated: 'badge-gold' };
+    return map[a] || 'badge-gold';
+  }
+
+  function actionDotColor(a) {
+    const map = { Created: 'var(--green)', Edited: 'var(--amber)', Activated: 'var(--green)', Approved: 'var(--green)',
+      Retired: 'var(--red)', PromptImported: 'var(--accent)', UpgradeProposed: 'var(--purple)',
+      UpgradeResponseRecorded: 'var(--amber)', UpgradeApplied: 'var(--green)', UpgradeAbandoned: 'var(--red)',
+      InjectionDetected: 'var(--red)', ComplianceChecked: 'var(--accent)', PromptGenerated: 'var(--accent)' };
+    return map[a] || 'var(--text2)';
   }
 
   function fmtTime(iso) {
