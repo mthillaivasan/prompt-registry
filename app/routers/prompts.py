@@ -498,7 +498,7 @@ def generate_prompt_text(
                 detail=f"Injection detected in brief text: {scan_result['message']}",
             )
 
-    from services.prompt_components import get_input_handler_text, get_output_handler_text, get_regulatory_text
+    from services.prompt_components import get_input_handler_text, get_output_handler_text, get_regulatory_text, get_behaviour_text
 
     selected_dims = _resolve_guardrails(body, db)
     guardrail_block = "\n".join(
@@ -523,8 +523,11 @@ def generate_prompt_text(
     brief_parts.append(f"\nOUTPUT HANDLER COMPONENT TO INCLUDE IN THE GENERATED PROMPT:\n{output_handler}")
     if reg_text:
         brief_parts.append(f"\nREGULATORY GUARDRAIL COMPONENTS TO INCLUDE IN THE GENERATED PROMPT:\n{reg_text}")
+    beh_text = get_behaviour_text(body.constraints)
+    if beh_text:
+        brief_parts.append(f"\nBEHAVIOUR GUARDRAIL COMPONENTS TO INCLUDE IN THE GENERATED PROMPT:\n{beh_text}")
 
-    user_message = "BRIEF:\n" + "\n".join(brief_parts) + "\n\nGenerate the prompt now. Include the input handler, output handler, and regulatory guardrail components verbatim in the prompt."
+    user_message = "BRIEF:\n" + "\n".join(brief_parts) + "\n\nGenerate the prompt now. Include all component blocks (input handler, output handler, regulatory guardrails, behaviour guardrails) verbatim in the prompt."
 
     try:
         client = anthropic.Anthropic()

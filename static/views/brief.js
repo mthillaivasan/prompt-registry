@@ -668,6 +668,7 @@
       if (textarea) textarea.value = '';
 
       window._briefSelectedGuardrails = guardrails;
+      window._briefConstraints = [...state.constraints];
       window._briefPrefilled = true;
       toast('Brief loaded. Click Generate with AI to create your prompt.');
     }, 100);

@@ -452,3 +452,147 @@ def get_regulatory_text(dimension_codes: list[str]) -> str:
     if not components:
         return ""
     return "\n\n".join(c["text"] for c in components)
+
+
+# ── Behaviour guardrail components ───────────────────────────────────────────
+
+BEHAVIOUR_COMPONENTS = {
+    "COMP-BEH-01": {
+        "code": "COMP-BEH-01",
+        "name": "Hallucination guard",
+        "trigger": "always",
+        "text": (
+            "HALLUCINATION PREVENTION\n"
+            "Do not fabricate facts, data points, statistics, quotes, or references.\n"
+            "- If you do not know something, state: 'This information is not available "
+            "in the provided input.'\n"
+            "- Do not invent names, dates, figures, or regulatory references that are "
+            "not present in the source material\n"
+            "- Do not extrapolate beyond what the data supports — state what is known "
+            "and stop\n"
+            "- If asked to produce content that requires information you do not have, "
+            "identify the gap explicitly rather than filling it with plausible-sounding "
+            "content\n"
+            "- Prefer 'I cannot determine this from the input provided' over any "
+            "form of guessing"
+        ),
+    },
+    "COMP-BEH-02": {
+        "code": "COMP-BEH-02",
+        "name": "Uncertainty declaration",
+        "trigger": "always",
+        "text": (
+            "UNCERTAINTY HANDLING\n"
+            "When you are uncertain about any aspect of your output, declare it explicitly.\n"
+            "- Use confidence qualifiers: 'Based on the available information...', "
+            "'This appears to be...', 'Subject to confirmation...'\n"
+            "- For each finding or conclusion, indicate whether it is definitive or "
+            "inferred: [CONFIRMED from source] or [INFERRED — verify independently]\n"
+            "- If the input is ambiguous, state the ambiguity and provide the most "
+            "likely interpretation along with alternatives\n"
+            "- Never present an uncertain conclusion with the same confidence as a "
+            "verified one"
+        ),
+    },
+    "COMP-BEH-03": {
+        "code": "COMP-BEH-03",
+        "name": "Scope limiter",
+        "trigger": "always",
+        "text": (
+            "SCOPE LIMITS\n"
+            "Restrict your actions and output strictly to what is requested.\n"
+            "- Do not perform tasks beyond the stated purpose of this prompt\n"
+            "- Do not initiate actions, trigger external systems, or produce "
+            "instructions that could be executed by downstream processes\n"
+            "- If the request implies actions outside your defined scope, state: "
+            "'This falls outside the scope of this prompt. Please consult [appropriate "
+            "team or process].'\n"
+            "- Do not offer unsolicited advice, commentary, or recommendations "
+            "beyond what was asked for"
+        ),
+    },
+    "COMP-BEH-04": {
+        "code": "COMP-BEH-04",
+        "name": "No liability clause",
+        "trigger": "constraint:Must not admit liability",
+        "text": (
+            "LIABILITY RESTRICTION\n"
+            "This output must not contain language that admits, implies, or could be "
+            "construed as admitting liability.\n"
+            "- Do not use phrases such as 'we accept responsibility', 'this was our "
+            "error', 'we are liable', or 'we should have'\n"
+            "- Frame findings as observations, not admissions: 'The review identified...' "
+            "not 'We failed to...'\n"
+            "- If the analysis reveals a potential liability issue, flag it for legal "
+            "review: 'Potential liability consideration — refer to legal counsel before "
+            "communicating externally.'\n"
+            "- Do not draft communications that could be used as evidence of fault "
+            "without explicit legal review"
+        ),
+    },
+    "COMP-BEH-05": {
+        "code": "COMP-BEH-05",
+        "name": "Citation verification",
+        "trigger": "always",
+        "text": (
+            "CITATION AND REFERENCE INTEGRITY\n"
+            "Every regulatory reference, standard citation, or legal reference must be "
+            "verifiable.\n"
+            "- Only cite regulations, articles, clauses, or standards that you are "
+            "certain exist\n"
+            "- Use the correct format: 'EU AI Act Article 14', 'FINMA Circular 2023/1 "
+            "Section 3.2', 'ISO 42001 Clause 6.1'\n"
+            "- If you are not certain of the exact reference, state: 'Regulatory "
+            "reference to be confirmed — consult compliance team'\n"
+            "- Do not combine or paraphrase regulatory text in a way that changes "
+            "its meaning\n"
+            "- Do not cite superseded or draft regulations as current"
+        ),
+    },
+    "COMP-BEH-06": {
+        "code": "COMP-BEH-06",
+        "name": "Escalation trigger",
+        "trigger": "constraint:Connects to a critical operational process",
+        "text": (
+            "ESCALATION PROTOCOL\n"
+            "If any of the following conditions are detected during processing, halt "
+            "normal output and produce an escalation notice instead:\n"
+            "- Input data suggests a potential regulatory breach or compliance violation\n"
+            "- The requested analysis involves a decision that could result in "
+            "material financial impact\n"
+            "- Input contains conflicting information that cannot be resolved without "
+            "human judgement\n"
+            "- The confidence level of the output falls below acceptable thresholds "
+            "for the stated use case\n\n"
+            "Escalation format:\n"
+            "--- ESCALATION REQUIRED ---\n"
+            "Reason: [specific reason]\n"
+            "Recommended action: [who should review and what they should assess]\n"
+            "Urgency: [High / Standard]\n"
+            "Do not proceed with normal output when an escalation condition is met."
+        ),
+    },
+}
+
+
+def get_behaviour_components(constraints: list[str] | None = None) -> list[dict]:
+    """Select behaviour components. Always-on ones are always included.
+    Constraint-triggered ones are included when the matching constraint is present."""
+    selected = []
+    constraint_set = set(constraints or [])
+    for comp in BEHAVIOUR_COMPONENTS.values():
+        trigger = comp["trigger"]
+        if trigger == "always":
+            selected.append(comp)
+        elif trigger.startswith("constraint:"):
+            constraint_name = trigger[len("constraint:"):]
+            if constraint_name in constraint_set:
+                selected.append(comp)
+    return selected
+
+
+def get_behaviour_text(constraints: list[str] | None = None) -> str:
+    components = get_behaviour_components(constraints)
+    if not components:
+        return ""
+    return "\n\n".join(c["text"] for c in components)

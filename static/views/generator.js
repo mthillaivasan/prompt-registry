@@ -220,6 +220,10 @@ async function genAI() {
       body.selected_guardrails = window._briefSelectedGuardrails;
       window._briefSelectedGuardrails = null;
     }
+    if (window._briefConstraints && window._briefConstraints.length) {
+      body.constraints = window._briefConstraints;
+      window._briefConstraints = null;
+    }
     const resp = await api('/prompts/generate', { method: 'POST', body });
     textarea.value = resp.prompt_text;
     textarea.style.height = 'auto';
