@@ -374,7 +374,8 @@ def validate_brief(
                 options=parsed.get("options"),
                 free_text_placeholder=parsed.get("free_text_placeholder"),
             )
-    except Exception:
+    except Exception as e:
+        print(f"WARNING: Brief validation failed: {e}")
         return ValidateBriefResponse(tier=1, accepted=True)
 
 
