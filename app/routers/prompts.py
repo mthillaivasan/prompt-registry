@@ -498,14 +498,16 @@ def generate_prompt_text(
                 detail=f"Injection detected in brief text: {scan_result['message']}",
             )
 
-    from services.prompt_components import get_input_handler_text, get_output_handler_text, get_regulatory_text, get_behaviour_text
+    from services.prompt_components import assemble_template, get_input_handler_text, get_output_handler_text, get_regulatory_text, get_behaviour_text
 
     selected_dims = _resolve_guardrails(body, db)
     guardrail_block = "\n".join(
         f"- {d.code} ({d.name}): {d.description}" for d in selected_dims
     )
-    input_handler = get_input_handler_text(body.input_type)
     system_prompt = _GENERATE_SYSTEM_PROMPT_TEMPLATE.replace("{guardrail_block}", guardrail_block)
+
+    # Assemble components from template if available, otherwise from selections
+    assembled = assemble_template(body.prompt_type, body.constraints)
 
     brief_parts = [f"Title: {body.title}", f"Prompt type: {body.prompt_type}"]
     if body.deployment_target:
@@ -516,18 +518,17 @@ def generate_prompt_text(
         brief_parts.append(f"Output type: {body.output_type}")
     if body.brief_text:
         brief_parts.append(f"Additional brief:\n{body.brief_text}")
-    output_handler = get_output_handler_text(body.output_type)
-    reg_codes = [d.code for d in selected_dims if d.code.startswith("REG_")]
-    reg_text = get_regulatory_text(reg_codes)
-    brief_parts.append(f"\nINPUT HANDLER COMPONENT TO INCLUDE IN THE GENERATED PROMPT:\n{input_handler}")
-    brief_parts.append(f"\nOUTPUT HANDLER COMPONENT TO INCLUDE IN THE GENERATED PROMPT:\n{output_handler}")
-    if reg_text:
-        brief_parts.append(f"\nREGULATORY GUARDRAIL COMPONENTS TO INCLUDE IN THE GENERATED PROMPT:\n{reg_text}")
-    beh_text = get_behaviour_text(body.constraints)
-    if beh_text:
-        brief_parts.append(f"\nBEHAVIOUR GUARDRAIL COMPONENTS TO INCLUDE IN THE GENERATED PROMPT:\n{beh_text}")
 
-    user_message = "BRIEF:\n" + "\n".join(brief_parts) + "\n\nGenerate the prompt now. Include all component blocks (input handler, output handler, regulatory guardrails, behaviour guardrails) verbatim in the prompt."
+    brief_parts.append(f"\nINPUT HANDLER COMPONENT TO INCLUDE VERBATIM:\n{assembled['input']}")
+    brief_parts.append(f"\nOUTPUT HANDLER COMPONENT TO INCLUDE VERBATIM:\n{assembled['output']}")
+    if assembled["regulatory"]:
+        brief_parts.append(f"\nREGULATORY GUARDRAIL COMPONENTS TO INCLUDE VERBATIM:\n{assembled['regulatory']}")
+    if assembled["behaviour"]:
+        brief_parts.append(f"\nBEHAVIOUR GUARDRAIL COMPONENTS TO INCLUDE VERBATIM:\n{assembled['behaviour']}")
+    if assembled.get("example"):
+        brief_parts.append(f"\n{assembled['example']}")
+
+    user_message = "BRIEF:\n" + "\n".join(brief_parts) + "\n\nGenerate the prompt now. Include all component blocks verbatim. If an output example is provided, follow its exact structure."
 
     try:
         client = anthropic.Anthropic()

@@ -619,3 +619,140 @@ def get_behaviour_text(constraints: list[str] | None = None) -> str:
     if not components:
         return ""
     return "\n\n".join(c["text"] for c in components)
+
+
+# ── Prompt templates ─────────────────────────────────────────────────────────
+
+TEMPLATES = {
+    "Governance": {
+        "name": "Governance Assessment",
+        "description": "Structured governance review with regulatory scoring and compliance flags",
+        "input_handler": "Form responses",
+        "output_handler": "Structured assessment",
+        "regulatory_codes": ["REG_D1", "REG_D2", "REG_D4"],
+        "behaviour_codes": ["COMP-BEH-01", "COMP-BEH-02", "COMP-BEH-05"],
+        "output_example": (
+            "EXAMPLE OUTPUT:\n\n"
+            "## Assessment Summary\n"
+            "Overall recommendation: APPROVE WITH CONDITIONS\n\n"
+            "## Dimension Scores\n"
+            "| Dimension | Score | Finding |\n"
+            "|---|---|---|\n"
+            "| Strategic alignment | 4/5 | Clear business case with defined objectives |\n"
+            "| Risk assessment | 3/5 | Risk register incomplete — two residual risks not quantified |\n"
+            "| Cost and resource | 4/5 | Within approved budget envelope |\n"
+            "| Regulatory compliance | 3/5 | EU AI Act assessment pending |\n"
+            "| Data governance | 4/5 | Data classification completed, DPO sign-off obtained |\n"
+            "| Operational readiness | 2/5 | No fallback process documented |\n\n"
+            "## Open Questions\n"
+            "1. Who is the named human reviewer for ongoing model output oversight?\n"
+            "2. What is the manual fallback if the AI output is unavailable during a critical window?\n"
+            "3. Has the outsourcing assessment been completed for the third-party AI provider?\n\n"
+            "## Regulatory Flags\n"
+            "- EU AI Act Article 14: Human oversight mechanism not declared in the prompt\n"
+            "- FINMA Circular 2023/1: Audit trail instruction missing — output not storable as audit record\n"
+            "- nDSG Article 6: Legal basis for personal data processing not stated\n"
+        ),
+    },
+    "Analysis": {
+        "name": "Analysis Report",
+        "description": "Detailed analytical assessment with evidence-based findings",
+        "input_handler": "Document or report",
+        "output_handler": "Structured assessment",
+        "regulatory_codes": ["REG_D1", "REG_D4"],
+        "behaviour_codes": ["COMP-BEH-01", "COMP-BEH-02", "COMP-BEH-05"],
+        "output_example": None,
+    },
+    "Comms": {
+        "name": "Communication Draft",
+        "description": "Draft communication with human review requirement",
+        "input_handler": "Free text",
+        "output_handler": "Draft comms",
+        "regulatory_codes": ["REG_D1", "REG_D2"],
+        "behaviour_codes": ["COMP-BEH-01", "COMP-BEH-03"],
+        "output_example": None,
+    },
+    "Summarisation": {
+        "name": "Document Summary",
+        "description": "Concise executive summary with action items",
+        "input_handler": "Document or report",
+        "output_handler": "Executive narrative",
+        "regulatory_codes": ["REG_D1", "REG_D2"],
+        "behaviour_codes": ["COMP-BEH-01", "COMP-BEH-02"],
+        "output_example": None,
+    },
+    "Extraction": {
+        "name": "Data Extraction",
+        "description": "Structured data extraction with confidence scoring",
+        "input_handler": "Document or report",
+        "output_handler": "Data extraction",
+        "regulatory_codes": ["REG_D1", "REG_D4"],
+        "behaviour_codes": ["COMP-BEH-01", "COMP-BEH-02"],
+        "output_example": None,
+    },
+    "Comparison": {
+        "name": "Comparison Analysis",
+        "description": "Side-by-side comparison with criteria-based scoring",
+        "input_handler": "Data table",
+        "output_handler": "Comparison table",
+        "regulatory_codes": ["REG_D1"],
+        "behaviour_codes": ["COMP-BEH-01", "COMP-BEH-03"],
+        "output_example": None,
+    },
+    "Risk Review": {
+        "name": "Risk Flag Report",
+        "description": "Risk and compliance flag identification with regulatory references",
+        "input_handler": "Document or report",
+        "output_handler": "Flag report",
+        "regulatory_codes": ["REG_D1", "REG_D2", "REG_D4", "REG_D5"],
+        "behaviour_codes": ["COMP-BEH-01", "COMP-BEH-02", "COMP-BEH-05", "COMP-BEH-06"],
+        "output_example": None,
+    },
+    "Classification": {
+        "name": "Classification Assessment",
+        "description": "Categorisation with structured scoring output",
+        "input_handler": "Form responses",
+        "output_handler": "Structured assessment",
+        "regulatory_codes": ["REG_D1", "REG_D4"],
+        "behaviour_codes": ["COMP-BEH-01", "COMP-BEH-02"],
+        "output_example": None,
+    },
+}
+
+
+def get_template(prompt_type: str) -> dict | None:
+    return TEMPLATES.get(prompt_type)
+
+
+def assemble_template(prompt_type: str, constraints: list[str] | None = None) -> dict:
+    """Assemble all components for a given template. Returns component texts and metadata."""
+    template = TEMPLATES.get(prompt_type)
+    if not template:
+        return {"input": get_input_handler_text("Free text"), "output": get_output_handler_text(""), "regulatory": "", "behaviour": get_behaviour_text(constraints), "example": None}
+
+    input_text = get_input_handler_text(template["input_handler"])
+    output_text = get_output_handler_text(template["output_handler"])
+    reg_text = get_regulatory_text(template["regulatory_codes"])
+
+    # Behaviour: template-specified codes + constraint-triggered
+    beh_codes = set(template["behaviour_codes"])
+    all_beh = []
+    for code, comp in BEHAVIOUR_COMPONENTS.items():
+        if code in beh_codes:
+            all_beh.append(comp)
+        elif comp["trigger"] == "always" and code not in beh_codes:
+            pass  # template overrides — only include what's specified
+        elif comp["trigger"].startswith("constraint:"):
+            constraint_name = comp["trigger"][len("constraint:"):]
+            if constraints and constraint_name in constraints:
+                all_beh.append(comp)
+    beh_text = "\n\n".join(c["text"] for c in all_beh)
+
+    return {
+        "input": input_text,
+        "output": output_text,
+        "regulatory": reg_text,
+        "behaviour": beh_text,
+        "example": template.get("output_example"),
+        "template_name": template["name"],
+    }
