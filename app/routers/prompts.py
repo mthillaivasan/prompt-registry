@@ -255,8 +255,27 @@ Return JSON: {{"tier": 1}}
 
 TIER 2 — Two of three elements present. One element is weak but \
 inferable. Return JSON: \
-{{"tier": 2, "suggestion": "one sentence explaining the missing element", \
+{{"tier": 2, "suggestion": "one sentence", \
 "suggested_addition": "the specific phrase to add"}}
+
+TIER 2 SUGGESTION RULES — strictly follow these:
+- Must reference actual words or phrases from the user's input
+- Must suggest a specific addition, not a general improvement
+- One sentence maximum
+- Must address a gap that would materially improve the generated prompt
+- If the user uses informal or vague terms for a system, platform, or \
+process (e.g. "cool banking application", "the system", "our tool"), \
+suggest naming it specifically with examples from the domain \
+(e.g. Simcorp, Temenos, Charles River, Bloomberg AIM)
+
+BAD suggestion: "The output structure is clear but needs to specify \
+which staff will use this data"
+GOOD suggestion: "The target system is described as a banking \
+application — do you know its name? Naming it specifically (e.g. \
+Simcorp, Temenos, Charles River) will make the prompt more precise."
+GOOD suggestion: "Consider naming the team who loads data into \
+[system name from input] — this helps the prompt handle errors \
+and edge cases specific to that handoff"
 
 TIER 3 — One or more elements missing or vague. Generic language used. \
 Return JSON: \
