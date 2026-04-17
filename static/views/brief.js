@@ -10,7 +10,7 @@
   let restructuredBrief = null; // restructured text from Claude
   let useRestructured = true; // default to restructured
   const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [],
-    clientName: '', ownerName: '', ownerRole: '' };
+    clientName: '', ownerName: '', ownerRole: '', skipped: [] };
   let guardrailData = null;
   let briefId = null; // server-side brief ID once created
 
@@ -31,7 +31,7 @@
     step = 1; validationError = '';
     state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
     state.constraints = []; state.selectedGuardrails = [];
-    state.clientName = ''; state.ownerName = ''; state.ownerRole = '';
+    state.clientName = ''; state.ownerName = ''; state.ownerRole = ''; state.skipped = [];
     validationResult = null; tier3Count = 0; briefScore = null; restructuredBrief = null; useRestructured = true;
     guardrailData = null; briefId = null;
 
@@ -67,6 +67,7 @@
           state.outputType = answers.outputType || '';
           state.audience = answers.audience || '';
           state.constraints = answers.constraints || [];
+          state.skipped = answers.skipped || [];
           state.selectedGuardrails = JSON.parse(b.selected_guardrails || '[]');
           localStorage.setItem('pr_active_brief', briefId);
         }
@@ -241,8 +242,14 @@
       html += '<div></div>';
     }
     if (step < TOTAL_STEPS) {
-      const disabledStyle = valid ? '' : 'opacity:0.4;cursor:not-allowed;pointer-events:none';
+      const canSkip = step >= 2 && step <= 4;
+      const disabledStyle = valid ? '' : (canSkip ? '' : 'opacity:0.4;cursor:not-allowed;pointer-events:none');
+      html += '<div style="display:flex;align-items:center;gap:12px">';
+      if (canSkip && !valid) {
+        html += `<a style="font-size:13px;color:var(--text2);cursor:pointer;text-decoration:underline" onclick="window._briefSkipStep()">Skip this step</a>`;
+      }
       html += `<button class="btn btn-gold" id="brief-next-btn" style="padding:12px 0;width:${step > 1 ? '120px' : '100%'};justify-content:center;font-size:15px;${disabledStyle}" onclick="window._briefNext()">Next</button>`;
+      html += '</div>';
     } else {
       html += '<button class="btn btn-gold" style="padding:12px 0;width:120px;justify-content:center;font-size:15px" onclick="window._briefReview()">Review Brief</button>';
     }
@@ -386,6 +393,7 @@
           <tr><td style="color:var(--text2);vertical-align:top">Audience</td><td>${esc(state.audience || '(not specified)')}</td></tr>
           <tr><td style="color:var(--text2);vertical-align:top">Constraints</td><td>${state.constraints.length ? state.constraints.map(c => esc(c)).join('<br>') : '(none selected)'}</td></tr>
           <tr><td style="color:var(--text2);vertical-align:top">Guardrails</td><td>${state.selectedGuardrails.length} dimensions selected</td></tr>
+          ${state.skipped.length ? '<tr><td style="color:var(--text2);vertical-align:top">Skipped</td><td>' + state.skipped.map(s => '<span class="badge badge-amber" style="margin-right:4px">' + esc(s.name) + '</span>').join('') + '</td></tr>' : ''}
         </table>
       </div>`;
 
@@ -435,7 +443,7 @@
   async function saveBriefToServer() {
     const answers = {
       purpose: state.purpose, inputType: state.inputType, outputType: state.outputType,
-      audience: state.audience, constraints: state.constraints,
+      audience: state.audience, constraints: state.constraints, skipped: state.skipped,
     };
     const body = {
       step_progress: step,
@@ -462,6 +470,18 @@
 
   // Exposed handlers
   window._briefMeta = function (field, val) { state[field] = val; };
+  window._briefSkipStep = async function () {
+    saveStepState();
+    const skippedName = STEP_NAMES[step - 1] || 'Step ' + step;
+    state.skipped.push({ step, name: skippedName, timestamp: new Date().toISOString() });
+    validationError = ''; validationResult = null; tier3Count = 0;
+    step++;
+    await updateScore();
+    await saveBriefToServer();
+    if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
+    else renderStep();
+    toast('Skipped: ' + skippedName);
+  };
   window._briefSelect = function (field, val) { state[field] = val; validationError = ''; renderStep(); };
   window._briefToggle = function (opt, checked) {
     if (checked && !state.constraints.includes(opt)) state.constraints.push(opt);
@@ -557,7 +577,7 @@
     try {
       briefScore = await api('/prompts/briefs/score', { method: 'POST', body: {
         purpose: state.purpose, input_type: state.inputType, output_type: state.outputType,
-        audience: state.audience, constraints: state.constraints,
+        audience: state.audience, constraints: state.constraints, skipped: state.skipped,
         deployment_target: inferDeployTarget(),
       }});
     } catch (e) { /* score is optional */ }
