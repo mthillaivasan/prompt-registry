@@ -8,6 +8,11 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL", "sqlite:///./data/prompt_registry.db"
 )
 
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+_is_sqlite = "sqlite" in DATABASE_URL
+
 
 class Base(DeclarativeBase):
     pass
@@ -15,18 +20,19 @@ class Base(DeclarativeBase):
 
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-@event.listens_for(Engine, "connect")
-def set_sqlite_pragmas(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.close()
+if _is_sqlite:
+    @event.listens_for(Engine, "connect")
+    def set_sqlite_pragmas(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.close()
 
 
 def get_db():
