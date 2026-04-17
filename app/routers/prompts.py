@@ -19,6 +19,8 @@ from app.schemas import (
     PromptOut,
     PromptUpdate,
     PromptVersionOut,
+    ValidateBriefRequest,
+    ValidateBriefResponse,
 )
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
@@ -210,6 +212,55 @@ def update_prompt(
     db.commit()
     db.refresh(prompt)
     return _build_detail(prompt, db)
+
+
+# ── Validate brief description via Claude ────────────────────────────────────
+
+_VALIDATE_BRIEF_PROMPT = """\
+You are reviewing a brief for an AI prompt about to be built for a regulated \
+financial services firm.
+
+The user has provided this description of the prompt's purpose:
+"{user_input}"
+
+Assess whether this description is specific enough to generate a high quality \
+governed prompt. It must clearly state:
+1. What the AI will process (the input)
+2. What the AI will produce (the output)
+3. What the human does with the result
+
+If all three are clear — respond with: ACCEPTED
+If any are missing or vague — respond with: QUESTION: [one specific \
+follow-up question that addresses the most important gap]
+
+Do not ask more than one question at a time.
+Do not accept vague descriptions like "process documents" or "help with compliance"."""
+
+
+@router.post("/validate-brief", response_model=ValidateBriefResponse)
+def validate_brief(
+    body: ValidateBriefRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    prompt_text = _VALIDATE_BRIEF_PROMPT.replace("{user_input}", body.description)
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            max_tokens=256,
+            messages=[{"role": "user", "content": prompt_text}],
+        )
+        result = response.content[0].text.strip()
+        if result.startswith("ACCEPTED"):
+            return ValidateBriefResponse(accepted=True, question=None)
+        elif result.startswith("QUESTION:"):
+            question = result[len("QUESTION:"):].strip()
+            return ValidateBriefResponse(accepted=False, question=question)
+        else:
+            return ValidateBriefResponse(accepted=False, question=result)
+    except Exception as e:
+        return ValidateBriefResponse(accepted=True, question=None)
 
 
 # ── Generate prompt text via Claude ──────────────────────────────────────────

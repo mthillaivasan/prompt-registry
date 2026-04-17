@@ -112,6 +112,15 @@ class GenerateResponse(BaseModel):
     prompt_text: str
 
 
+class ValidateBriefRequest(BaseModel):
+    description: str = Field(min_length=1)
+
+
+class ValidateBriefResponse(BaseModel):
+    accepted: bool
+    question: str | None = None
+
+
 # ── Compliance schemas ───────────────────────────────────────────────────────
 
 class ComplianceCheckRequest(BaseModel):

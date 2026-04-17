@@ -64,8 +64,15 @@
             <span style="font-size:12px;color:${isValid ? 'var(--green)' : 'var(--text2)'}">${charCount}/20 characters ${isValid ? '&#10003;' : 'minimum'}</span>
           </div>
         </div>`;
-      if (validationError && !isValid) {
-        html += `<p style="color:var(--red);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
+      if (validationError) {
+        if (!isValid) {
+          html += `<p style="color:var(--red);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
+        } else {
+          html += `<div style="background:var(--surface2);border-left:3px solid var(--amber);padding:12px 16px;border-radius:0 6px 6px 0;margin-top:8px">
+            <div style="font-size:12px;color:var(--amber);margin-bottom:4px;font-weight:600">More detail needed</div>
+            <p style="font-size:14px;color:var(--text);margin:0">${esc(validationError)}</p>
+          </div>`;
+        }
       }
     } else if (step === 2) {
       html += `<h3 style="margin-bottom:12px">What goes in?</h3>
@@ -309,9 +316,26 @@
     }
   };
   window._briefPrev = function () { saveStepState(); validationError = ''; step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
-  window._briefNext = function () {
+  window._briefNext = async function () {
     saveStepState();
     if (!isStepValid()) { validationError = getValidationHint(); renderStep(); return; }
+
+    // Validate Step 1 description via Claude
+    if (step === 1) {
+      const btn = document.getElementById('brief-next-btn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Checking...'; }
+      try {
+        const resp = await api('/prompts/validate-brief', { method: 'POST', body: { description: state.purpose } });
+        if (!resp.accepted && resp.question) {
+          validationError = resp.question;
+          renderStep();
+          return;
+        }
+      } catch (e) {
+        // If validation fails (network/API error), let the user proceed
+      }
+    }
+
     validationError = '';
     step++;
     if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
