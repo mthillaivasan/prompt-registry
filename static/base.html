@@ -149,6 +149,17 @@ label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
 let authToken = localStorage.getItem('pr_token');
 let currentUser = null;
 
+function isTokenValid(token) {
+  if (!token) return false;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload.exp) return false;
+    return payload.exp * 1000 > Date.now();
+  } catch (e) { return false; }
+}
+
 async function api(path, opts = {}) {
   const config = { headers: { 'Content-Type': 'application/json' }, ...opts };
   if (authToken) config.headers['Authorization'] = 'Bearer ' + authToken;
@@ -252,7 +263,14 @@ async function pollJob(jobId, interval = 1000, max = 30) {
   throw new Error('Job timed out');
 }
 
-if (authToken) showApp(); // auto-login if token stored
+if (isTokenValid(authToken)) {
+  showApp();
+} else {
+  authToken = null;
+  localStorage.removeItem('pr_token');
+  document.getElementById('login-screen').style.display = 'block';
+  document.getElementById('app-shell').style.display = 'none';
+}
 </script>
 <script>
 function openHelp(section){const o=document.getElementById('help-overlay');o.classList.add('open');if(section)showHelpSection(section);else if(!document.querySelector('.help-section.active'))showHelpSection('overview');}
