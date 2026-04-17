@@ -12,6 +12,8 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import AuditLog, Prompt, PromptVersion, ScoringDimension, User
 from app.schemas import (
+    BriefScoreRequest,
+    BriefScoreResponse,
     GenerateRequest,
     GenerateResponse,
     PromptCreate,
@@ -19,6 +21,8 @@ from app.schemas import (
     PromptOut,
     PromptUpdate,
     PromptVersionOut,
+    RestructureBriefRequest,
+    RestructureBriefResponse,
     ValidateBriefRequest,
     ValidateBriefResponse,
 )
@@ -285,6 +289,95 @@ def validate_brief(
             )
     except Exception:
         return ValidateBriefResponse(tier=1, accepted=True)
+
+
+# ── Brief quality score ──────────────────────────────────────────────────────
+
+@router.post("/briefs/score", response_model=BriefScoreResponse)
+def score_brief(
+    body: BriefScoreRequest,
+    current_user: User = Depends(get_current_user),
+):
+    specificity = 0
+    if body.purpose and len(body.purpose) >= 20:
+        specificity += 8
+    if body.input_type:
+        specificity += 9
+    if body.output_type:
+        specificity += 8
+
+    context = 0
+    if body.audience:
+        context += 13
+    if body.deployment_target:
+        context += 12
+
+    constraints_score = 0
+    if body.constraints:
+        constraints_score = min(25, len(body.constraints) * 5)
+
+    completeness = 0
+    filled = sum(1 for v in [body.purpose, body.input_type, body.output_type, body.audience] if v)
+    completeness = min(25, filled * 6)
+    if body.purpose and len(body.purpose) >= 50:
+        completeness = min(25, completeness + 3)
+
+    total = min(100, specificity + context + constraints_score + completeness)
+
+    if total >= 80:
+        label = "Gold standard brief"
+    elif total >= 60:
+        label = "Strong"
+    elif total >= 40:
+        label = "Reasonable"
+    else:
+        label = "Weak"
+
+    dims = {"Specificity": specificity, "Context": context, "Constraints": constraints_score, "Completeness": completeness}
+    weakest = min(dims, key=dims.get)
+
+    tips = {
+        "Specificity": "Name the specific document type or data source the AI will process",
+        "Context": "Specify who will use the output and where it will be deployed",
+        "Constraints": "Select constraints that apply to this use case",
+        "Completeness": "Complete the remaining steps for a stronger brief",
+    }
+
+    return BriefScoreResponse(
+        score=total,
+        label=label,
+        weakest_dimension=weakest,
+        improvement_tip=tips[weakest],
+        dimensions=dims,
+    )
+
+
+# ── Brief restructuring ─────────────────────────────────────────────────────
+
+_RESTRUCTURE_PROMPT = """\
+You are a senior AI consultant. Rewrite the following brief answers as a \
+single coherent paragraph that a prompt generator can use directly. \
+Write in third person describing what the AI system should do. Be specific \
+and include all constraints and guardrails mentioned. Maximum 100 words. \
+Do not add information not in the brief."""
+
+
+@router.post("/briefs/restructure", response_model=RestructureBriefResponse)
+def restructure_brief(
+    body: RestructureBriefRequest,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            max_tokens=256,
+            system=_RESTRUCTURE_PROMPT,
+            messages=[{"role": "user", "content": f"Brief answers:\n{body.brief_text}"}],
+        )
+        return RestructureBriefResponse(restructured=response.content[0].text.strip())
+    except Exception as e:
+        return RestructureBriefResponse(restructured=body.brief_text)
 
 
 # ── Generate prompt text via Claude ──────────────────────────────────────────

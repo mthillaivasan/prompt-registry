@@ -126,6 +126,31 @@ class ValidateBriefResponse(BaseModel):
     suggested_addition: str | None = None
 
 
+class BriefScoreRequest(BaseModel):
+    purpose: str = ""
+    input_type: str = ""
+    output_type: str = ""
+    audience: str = ""
+    constraints: list[str] = []
+    deployment_target: str = ""
+
+
+class BriefScoreResponse(BaseModel):
+    score: int
+    label: str
+    weakest_dimension: str
+    improvement_tip: str
+    dimensions: dict[str, int] = {}
+
+
+class RestructureBriefRequest(BaseModel):
+    brief_text: str = Field(min_length=1)
+
+
+class RestructureBriefResponse(BaseModel):
+    restructured: str
+
+
 # ── Compliance schemas ───────────────────────────────────────────────────────
 
 class ComplianceCheckRequest(BaseModel):

@@ -1,9 +1,14 @@
 // Brief Builder — 6-step guided form + review, purely frontend state
 (function () {
   const TOTAL_STEPS = 6;
+  const STEP_NAMES = ['Purpose', 'Input type', 'Output type', 'Audience', 'Constraints', 'Guardrails'];
   let step = 1;
   let validationError = '';
-  let validationResult = null; // stores the full API response for tier 2/3 rendering
+  let validationResult = null;
+  let tier3Count = 0; // question counter per step
+  let briefScore = null; // { score, label, weakest_dimension, improvement_tip, dimensions }
+  let restructuredBrief = null; // restructured text from Claude
+  let useRestructured = true; // default to restructured
   const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [] };
   let guardrailData = null;
 
@@ -24,7 +29,7 @@
     step = 1; validationError = '';
     state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
     state.constraints = []; state.selectedGuardrails = [];
-    validationResult = null;
+    validationResult = null; tier3Count = 0; briefScore = null; restructuredBrief = null; useRestructured = true;
     guardrailData = null;
     renderStep();
   };
@@ -45,14 +50,42 @@
     return '';
   }
 
+  function buildQualityDial() {
+    if (!briefScore) return '';
+    const s = briefScore.score;
+    const pct = s / 100;
+    const r = 38, cx = 50, cy = 50;
+    const circumference = 2 * Math.PI * r;
+    const dashoffset = circumference * (1 - pct);
+    const color = s >= 70 ? 'var(--green)' : s >= 40 ? 'var(--amber)' : 'var(--red)';
+    return `<div style="text-align:center;min-width:100px">
+      <svg width="80" height="80" viewBox="0 0 100 100">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--surface2)" stroke-width="6"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="6"
+          stroke-dasharray="${circumference}" stroke-dashoffset="${dashoffset}"
+          stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})" style="transition:stroke-dashoffset .5s"/>
+        <text x="${cx}" y="${cy+2}" text-anchor="middle" dominant-baseline="middle"
+          fill="${color}" font-family="var(--font-mono)" font-size="18" font-weight="700">${s}</text>
+      </svg>
+      <div style="font-size:11px;color:var(--text2);margin-top:-4px">${esc(briefScore.label)}</div>
+    </div>`;
+  }
+
   function renderStep() {
     const el = document.getElementById('view-brief');
-    const progress = `<div style="display:flex;gap:4px;margin-bottom:24px">${
+    const progress = `<div style="display:flex;gap:4px;margin-bottom:12px">${
       Array.from({length: TOTAL_STEPS}, (_, i) => i + 1).map(i =>
         `<div style="flex:1;height:4px;border-radius:2px;background:${i <= step ? 'var(--accent)' : 'var(--surface2)'}"></div>`
       ).join('')}</div>`;
+    const remaining = STEP_NAMES.slice(step).map(n => esc(n)).join(' &middot; ');
 
-    let html = '<h2 style="margin-bottom:8px">Brief Builder</h2><p style="color:var(--text2);margin-bottom:20px;font-size:14px">Step ' + step + ' of ' + TOTAL_STEPS + '</p>' + progress + '<div class="card">';
+    let html = `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div>
+        <h2 style="margin-bottom:4px">Step ${step} of ${TOTAL_STEPS}</h2>
+        <p style="color:var(--text2);font-size:13px">${remaining ? 'Next: ' + remaining : 'Final step'}</p>
+      </div>
+      ${buildQualityDial()}
+    </div>` + progress + '<div class="card">';
 
     if (step === 1) {
       const charCount = state.purpose.length;
@@ -81,7 +114,9 @@
       }
       // Tier 3 — question with options
       if (validationResult && validationResult.tier === 3) {
+        const counterText = tier3Count === 1 ? 'One question — then we can move on.' : 'Last question on this — then we are ready.';
         html += `<div style="background:var(--surface2);border-left:3px solid var(--amber);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
+          <div style="font-size:12px;color:var(--amber);margin-bottom:6px;font-family:var(--font-mono)">${counterText}</div>
           <div style="font-size:15px;color:var(--text);margin-bottom:10px;font-family:var(--font-heading)">${esc(validationResult.question || 'Help me understand this better')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">`;
         (validationResult.options || []).forEach(opt => {
@@ -291,7 +326,9 @@
   function renderReview() {
     const el = document.getElementById('view-brief');
     const brief = buildBriefText();
-    let html = `<h2 style="margin-bottom:20px">Review Brief</h2>
+    let html = `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+      <h2>Review Brief</h2>${buildQualityDial()}
+    </div>
       <div class="card">
         <table>
           <tr><td style="color:var(--text2);width:140px;vertical-align:top">Purpose</td><td>${esc(state.purpose || '(not specified)')}</td></tr>
@@ -299,20 +336,51 @@
           <tr><td style="color:var(--text2);vertical-align:top">Output type</td><td>${esc(state.outputType || '(not specified)')}</td></tr>
           <tr><td style="color:var(--text2);vertical-align:top">Audience</td><td>${esc(state.audience || '(not specified)')}</td></tr>
           <tr><td style="color:var(--text2);vertical-align:top">Constraints</td><td>${state.constraints.length ? state.constraints.map(c => esc(c)).join('<br>') : '(none selected)'}</td></tr>
-          <tr><td style="color:var(--text2);vertical-align:top">Guardrails</td><td>${state.selectedGuardrails.length} dimensions selected (${state.selectedGuardrails.join(', ')})</td></tr>
+          <tr><td style="color:var(--text2);vertical-align:top">Guardrails</td><td>${state.selectedGuardrails.length} dimensions selected</td></tr>
         </table>
+      </div>`;
+
+    // Restructured brief
+    if (restructuredBrief) {
+      const selRestructured = useRestructured ? 'border-color:var(--accent)' : 'border-color:var(--border);opacity:.7';
+      const selOriginal = !useRestructured ? 'border-color:var(--accent)' : 'border-color:var(--border);opacity:.7';
+      html += `<div class="card" style="${selRestructured}">
+        <div class="card-title" style="margin-bottom:8px;color:var(--accent)">Restructured brief — recommended</div>
+        <div class="prompt-text">${esc(restructuredBrief)}</div>
+        <button class="btn btn-gold btn-sm" style="margin-top:10px" onclick="window._briefSelectVersion(true)">
+          ${useRestructured ? '&#10003; Selected' : 'Use restructured brief'}
+        </button>
       </div>
-      <div class="card">
+      <div class="card" style="${selOriginal}">
+        <div class="card-title" style="margin-bottom:8px">Original answers</div>
+        <div class="prompt-text" id="brief-output">${esc(brief)}</div>
+        <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="window._briefSelectVersion(false)">
+          ${!useRestructured ? '&#10003; Selected' : 'Use my original answers'}
+        </button>
+      </div>`;
+    } else {
+      html += `<div class="card">
         <div class="card-title" style="margin-bottom:8px">Structured Brief</div>
         <div class="prompt-text" id="brief-output">${esc(brief)}</div>
-      </div>
-      <div style="display:flex;gap:12px;margin-top:16px">
+      </div>`;
+    }
+
+    if (briefScore && briefScore.improvement_tip) {
+      html += `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;padding:0 4px">Tip: ${esc(briefScore.improvement_tip)}</div>`;
+    }
+
+    html += `<div style="display:flex;gap:12px;margin-top:8px">
         <button class="btn btn-outline" onclick="window._briefBack()">Back to editing</button>
         <button class="btn btn-outline" onclick="window._briefCopy()">Copy brief</button>
-        <button class="btn btn-primary" onclick="window._briefSend()">Send to Generator</button>
+        <button class="btn btn-gold" onclick="window._briefSend()">Send to Generator</button>
       </div>`;
     el.innerHTML = html;
   }
+
+  window._briefSelectVersion = function (useRestr) {
+    useRestructured = useRestr;
+    renderReview();
+  };
 
   // Exposed handlers
   window._briefSelect = function (field, val) { state[field] = val; validationError = ''; renderStep(); };
@@ -362,7 +430,7 @@
     renderStep();
     window._briefNext();
   };
-  window._briefPrev = function () { saveStepState(); validationError = ''; validationResult = null; step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
+  window._briefPrev = function () { saveStepState(); validationError = ''; validationResult = null; tier3Count = 0; step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
   window._briefNext = async function () {
     saveStepState();
     if (!isStepValid()) { validationError = getValidationHint(); renderStep(); return; }
@@ -376,26 +444,50 @@
         if (resp.tier === 1) {
           // Strong — proceed
         } else if (resp.tier === 2) {
-          // Workable — show suggestion, let user choose
-          renderStep();
-          return;
+          renderStep(); return;
         } else {
-          // Too vague — show question with options
-          renderStep();
-          return;
+          // Tier 3 — enforce question counter
+          tier3Count++;
+          if (tier3Count >= 3) {
+            // Third attempt — accept as tier 2, never ask again
+            validationResult = null;
+          } else {
+            renderStep(); return;
+          }
         }
-      } catch (e) {
-        // On API failure, proceed silently
-      }
+      } catch (e) { /* proceed on failure */ }
     }
 
-    validationError = ''; validationResult = null;
+    validationError = ''; validationResult = null; tier3Count = 0;
     step++;
+    await updateScore();
     if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
     else renderStep();
   };
-  window._briefReview = function () { saveStepState(); renderReview(); };
-  window._briefBack = function () { step = 1; validationError = ''; guardrailData = null; renderStep(); };
+  window._briefReview = async function () {
+    saveStepState();
+    await updateScore();
+    await loadRestructuredBrief();
+    renderReview();
+  };
+  window._briefBack = function () { step = 1; validationError = ''; validationResult = null; tier3Count = 0; guardrailData = null; renderStep(); };
+
+  async function updateScore() {
+    try {
+      briefScore = await api('/prompts/briefs/score', { method: 'POST', body: {
+        purpose: state.purpose, input_type: state.inputType, output_type: state.outputType,
+        audience: state.audience, constraints: state.constraints,
+        deployment_target: inferDeployTarget(),
+      }});
+    } catch (e) { /* score is optional */ }
+  }
+
+  async function loadRestructuredBrief() {
+    try {
+      const resp = await api('/prompts/briefs/restructure', { method: 'POST', body: { brief_text: buildBriefText() } });
+      restructuredBrief = resp.restructured;
+    } catch (e) { restructuredBrief = null; }
+  }
 
   window._briefCopy = function () {
     const text = buildBriefText();
@@ -433,7 +525,7 @@
       if (output) output.value = state.outputType || output.value;
 
       // Store brief text for the Generate API call, but do NOT put it in the textarea
-      window._briefTextForGenerate = buildBriefText();
+      window._briefTextForGenerate = (useRestructured && restructuredBrief) ? restructuredBrief : buildBriefText();
       if (textarea) textarea.value = '';
 
       window._briefSelectedGuardrails = guardrails;
