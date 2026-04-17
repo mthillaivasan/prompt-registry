@@ -87,6 +87,25 @@
         localStorage.removeItem('pr_active_brief');
       }
     }
+    // Pre-fill from template
+    if (params && params.fromTemplate) {
+      const t = params.fromTemplate;
+      state.purpose = t.description || '';
+      state.inputType = t.input_type || '';
+      state.outputType = t.output_type || '';
+      window._briefHasContent = true;
+      window._inBrief = true;
+      const el = document.getElementById('view-brief');
+      el.innerHTML = `<div class="card" style="border-left:3px solid var(--accent);max-width:600px;margin:40px auto">
+        <h3 style="margin-bottom:8px">Starting from template: ${esc(t.name)}</h3>
+        <p style="color:var(--text2);font-size:14px;margin-bottom:16px">${esc(t.description)} — customise any step or proceed directly to review.</p>
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-gold" onclick="navigate('brief')">Customise Steps</button>
+          <button class="btn btn-outline" onclick="window._briefReview()">Go to Review</button>
+        </div>
+      </div>`;
+      return;
+    }
     window._inBrief = true;
     window._briefHasContent = false;
     renderStep();

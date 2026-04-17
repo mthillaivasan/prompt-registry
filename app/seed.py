@@ -10,7 +10,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import InjectionPattern, ScoringDimension, User
+from app.models import InjectionPattern, PromptComponent, PromptTemplate, ScoringDimension, User
 
 _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -354,11 +354,114 @@ def _seed_patterns(db: Session) -> None:
     db.commit()
 
 
+def _seed_components(db: Session) -> None:
+    if db.query(PromptComponent).count() > 0:
+        return
+    from services.prompt_components import INPUT_HANDLERS, OUTPUT_HANDLERS, REGULATORY_COMPONENTS, BEHAVIOUR_COMPONENTS
+    seen_codes = set()
+    order = 0
+    for key, h in INPUT_HANDLERS.items():
+        if h["code"] in seen_codes:
+            continue
+        seen_codes.add(h["code"])
+        order += 10
+        db.add(PromptComponent(code=h["code"], category="InputHandling", name=h["name"], description=key, component_text=h["text"], sort_order=order))
+    for key, h in OUTPUT_HANDLERS.items():
+        if h["code"] in seen_codes:
+            continue
+        seen_codes.add(h["code"])
+        order += 10
+        db.add(PromptComponent(code=h["code"], category="OutputFormat", name=h["name"], description=key, component_text=h["text"], example_output=h.get("example_output"), sort_order=order))
+    for code, c in REGULATORY_COMPONENTS.items():
+        seen_codes.add(c["code"])
+        order += 10
+        db.add(PromptComponent(code=c["code"], category="RegulatoryGuardrail", name=c["name"], description=code, component_text=c["text"], applicable_dimensions=f'["{code}"]', sort_order=order))
+    for code, c in BEHAVIOUR_COMPONENTS.items():
+        seen_codes.add(code)
+        order += 10
+        db.add(PromptComponent(code=code, category="Behavioural", name=c["name"], description=c.get("trigger", "always"), component_text=c["text"], sort_order=order))
+    db.commit()
+
+
+_TEMPLATES = [
+    dict(code="T01", name="Governance Assessment", description="Structured governance review with regulatory scoring and compliance flags",
+         use_case="Committee papers, project approvals, change governance", prompt_type="Governance", risk_tier="Limited",
+         input_type="Form responses", output_type="Structured assessment",
+         component_codes='["COMP-IN-02","COMP-OUT-01","COMP-REG-D1","COMP-REG-D2","COMP-REG-D4","COMP-BEH-01","COMP-BEH-05"]',
+         output_example="## Assessment Summary\nOverall: APPROVE TO PROCEED\n\n## Scores\n| Dimension | Score | Finding |\n|---|---|---|\n| Strategic alignment | 4/5 | Clear business case |\n| Risk | 3/5 | Mitigation plan incomplete |\n\n## Open Questions\n1. Who is the named human reviewer?\n\n## Regulatory Flags\n- EU AI Act: Human oversight mechanism not declared",
+         gold_standard_grade="B+", sort_order=10),
+    dict(code="T02", name="FINMA Circular Summary", description="Plain language summary of regulatory circulars with obligation flags",
+         use_case="Regulatory change management, compliance briefings", prompt_type="Summarisation", risk_tier="Limited",
+         input_type="Document or report", output_type="Executive narrative",
+         component_codes='["COMP-IN-01","COMP-OUT-02","COMP-REG-D1","COMP-REG-D2","COMP-BEH-01","COMP-BEH-02"]',
+         output_example="Three paragraph plain language summary. First paragraph: situation and key changes. Second: implications for the institution. Third: recommended actions with deadlines.",
+         gold_standard_grade="B+", sort_order=20),
+    dict(code="T03", name="Risk Register Executive Summary", description="CRO-level risk summary with ratings and trends",
+         use_case="Board reporting, risk committee papers", prompt_type="Summarisation", risk_tier="Limited",
+         input_type="Data table", output_type="Executive narrative",
+         component_codes='["COMP-IN-03","COMP-OUT-02","COMP-REG-D1","COMP-REG-D4","COMP-BEH-01","COMP-BEH-02"]',
+         output_example="Top 5 risks with rating, trend, mitigation status. CRO-level language suitable for board presentation.",
+         gold_standard_grade="B", sort_order=30),
+    dict(code="T04", name="Settlement Failure Communication", description="Professional email draft for settlement issues with no-liability language",
+         use_case="Operations settlement failures, counterparty communication", prompt_type="Comms", risk_tier="Limited",
+         input_type="Free text", output_type="Draft comms",
+         component_codes='["COMP-IN-04","COMP-OUT-04","COMP-REG-D1","COMP-REG-D2","COMP-BEH-03","COMP-BEH-04"]',
+         output_example="Subject: Settlement Query — [Trade Ref]\n\nDear [name],\n\n[body with no liability language]\n\n--- HUMAN REVIEW REQUIRED ---",
+         gold_standard_grade="B", sort_order=40),
+    dict(code="T05", name="Trade Confirmation Data Extraction", description="Structured data extraction from trade confirmations with confidence scoring",
+         use_case="Operations trade processing, STP enrichment", prompt_type="Extraction", risk_tier="High",
+         input_type="Document or report", output_type="Data extraction",
+         component_codes='["COMP-IN-01","COMP-OUT-03","COMP-REG-D1","COMP-REG-D3","COMP-REG-D4","COMP-BEH-01","COMP-BEH-02"]',
+         output_example='{"counterparty": {"value": "ABC Bank", "confidence": "high"}, "ISIN": {"value": null, "confidence": "low"}, "settlement_date": {"value": "2026-04-20", "confidence": "high"}}',
+         gold_standard_grade="B+", sort_order=50),
+    dict(code="T06", name="Compliance Gap Analysis", description="Regulatory gap identification with remediation steps",
+         use_case="Regulatory readiness, audit preparation", prompt_type="Risk Review", risk_tier="High",
+         input_type="Document or report", output_type="Flag report",
+         component_codes='["COMP-IN-01","COMP-OUT-06","COMP-REG-D1","COMP-REG-D2","COMP-REG-D4","COMP-BEH-01","COMP-BEH-05"]',
+         output_example="- SEVERITY: High\n  FINDING: No human oversight declared\n  REFERENCE: EU AI Act Article 14\n  ACTION: Add oversight clause to prompt",
+         gold_standard_grade="A-", sort_order=60),
+    dict(code="T07", name="Meeting Notes Summarisation", description="Decision and action extraction from meeting notes",
+         use_case="Committee meetings, project stand-ups", prompt_type="Summarisation", risk_tier="Minimal",
+         input_type="Free text", output_type="Executive narrative",
+         component_codes='["COMP-IN-04","COMP-OUT-02","COMP-REG-D1","COMP-BEH-01"]',
+         output_example="Decisions: [numbered list]\nActions: [owner, action, deadline]\nParking lot: [deferred items]",
+         gold_standard_grade="B", sort_order=70),
+    dict(code="T08", name="Policy Document Q&A", description="Direct answers from policy documents with page references",
+         use_case="Policy queries, compliance helpdesk", prompt_type="Analysis", risk_tier="Minimal",
+         input_type="Document or report", output_type="Executive narrative",
+         component_codes='["COMP-IN-01","COMP-OUT-02","COMP-REG-D1","COMP-BEH-01","COMP-BEH-02","COMP-BEH-05"]',
+         output_example="Answer: [direct answer]\nSource: [page/section reference]\nNote: [caveats or if not found in document]",
+         gold_standard_grade="B", sort_order=80),
+    dict(code="T09", name="Incident Report Drafting", description="Structured incident report with timeline and root cause",
+         use_case="Operational incidents, near-miss reporting", prompt_type="Governance", risk_tier="Limited",
+         input_type="Free text", output_type="Structured assessment",
+         component_codes='["COMP-IN-04","COMP-OUT-01","COMP-REG-D1","COMP-REG-D4","COMP-BEH-04"]',
+         output_example="## Assessment Summary\nOverall: REFER FOR REVIEW\n\n## Timeline\n[chronological events]\n\n## Root Cause\n[analysis]\n\n## Remediation\n[steps]",
+         gold_standard_grade="B", sort_order=90),
+    dict(code="T10", name="Client Communication Review", description="Review client-facing communications for tone, accuracy, and compliance",
+         use_case="Client letters, marketing material review", prompt_type="Risk Review", risk_tier="High",
+         input_type="Document or report", output_type="Flag report",
+         component_codes='["COMP-IN-01","COMP-OUT-06","COMP-REG-D1","COMP-REG-D2","COMP-BEH-03","COMP-BEH-04"]',
+         output_example="- SEVERITY: Medium\n  FINDING: Tone implies certainty where outcome is uncertain\n  REFERENCE: FCA Consumer Duty\n  ACTION: Reword paragraph 3 to include advisory qualification",
+         gold_standard_grade="B+", sort_order=100),
+]
+
+
+def _seed_templates(db: Session) -> None:
+    if db.query(PromptTemplate).count() > 0:
+        return
+    for t in _TEMPLATES:
+        db.add(PromptTemplate(template_id=_uuid(), is_active=True, **t))
+    db.commit()
+
+
 def run_seed() -> None:
     db = SessionLocal()
     try:
         _seed_admin(db)
         _seed_dimensions(db)
         _seed_patterns(db)
+        _seed_components(db)
+        _seed_templates(db)
     finally:
         db.close()

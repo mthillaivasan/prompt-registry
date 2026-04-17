@@ -352,3 +352,46 @@ class Brief(Base):
             name="ck_briefs_status",
         ),
     )
+
+
+class PromptComponent(Base):
+    __tablename__ = "prompt_components"
+
+    component_id = Column(String(36), primary_key=True, default=_uuid)
+    code = Column(String, unique=True, nullable=False)
+    category = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    component_text = Column(Text, nullable=False)
+    example_output = Column(Text, nullable=True)
+    applicable_dimensions = Column(Text, nullable=False, default="[]")
+    is_active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('InputHandling','OutputFormat','RegulatoryGuardrail','Behavioural')",
+            name="ck_pc_category",
+        ),
+    )
+
+
+class PromptTemplate(Base):
+    __tablename__ = "prompt_templates"
+
+    template_id = Column(String(36), primary_key=True, default=_uuid)
+    code = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    use_case = Column(Text, nullable=True)
+    prompt_type = Column(String, nullable=False)
+    risk_tier = Column(String, nullable=False, default="Limited")
+    input_type = Column(String, nullable=True)
+    output_type = Column(String, nullable=True)
+    component_codes = Column(Text, nullable=False, default="[]")
+    prompt_text = Column(Text, nullable=True)
+    output_example = Column(Text, nullable=True)
+    gold_standard_grade = Column(String, nullable=True)
+    applicable_to_client_types = Column(Text, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)

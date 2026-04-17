@@ -16,6 +16,8 @@ from app.models import (  # noqa: F401 — imports register all models with Base
     ComplianceCheckJob,
     InjectionPattern,
     Prompt,
+    PromptComponent,
+    PromptTemplate,
     PromptVersion,
     ScoringDimension,
     UpgradeProposal,
@@ -26,6 +28,7 @@ from app.routers import briefs as briefs_router
 from app.routers import compliance as compliance_router
 from app.routers import health as health_router
 from app.routers import prompts as prompts_router
+from app.routers import templates as templates_router
 from app.routers import upgrade as upgrade_router
 from app.routers import versions as versions_router
 from app.seed import run_seed
@@ -94,6 +97,7 @@ app.include_router(health_router.router)
 app.include_router(briefs_router.router)
 app.include_router(compliance_router.router)
 app.include_router(prompts_router.router)
+app.include_router(templates_router.router)
 app.include_router(upgrade_router.router)
 app.include_router(versions_router.router)
 app.mount("/static", StaticFiles(directory="static"), name="static")
