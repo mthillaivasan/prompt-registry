@@ -375,6 +375,48 @@ def validate_brief(
         return ValidateBriefResponse(tier=1, accepted=True)
 
 
+# ── Brief question relevance check ───────────────────────────────────────────
+
+_RELEVANCE_PROMPT = """\
+You are deciding whether to ask a follow-up question. Given the conversation \
+history, has this question already been answered or made irrelevant by a \
+previous answer?
+
+If the user said "manually loaded" or "no platform" or similar — platform \
+questions are irrelevant. If the user already specified the data type, do \
+not ask again. If the user already named the audience, do not ask who \
+receives the output.
+
+Reply with exactly: RELEVANT or SKIP"""
+
+
+@router.post("/briefs/check-relevance")
+def check_relevance(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+):
+    history = body.get("conversation_history", [])
+    question = body.get("proposed_question", "")
+    if not history or not question:
+        return {"result": "RELEVANT"}
+    try:
+        client = anthropic.Anthropic()
+        conversation = "\n".join(
+            f"Q: {e.get('question', '')}\nA: {e.get('answer', 'skipped')}" if isinstance(e, dict) else str(e)
+            for e in history
+        )
+        response = client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            max_tokens=8,
+            system=_RELEVANCE_PROMPT,
+            messages=[{"role": "user", "content": f"Conversation:\n{conversation}\n\nProposed question:\n{question}"}],
+        )
+        result = response.content[0].text.strip().upper()
+        return {"result": "SKIP" if "SKIP" in result else "RELEVANT"}
+    except Exception:
+        return {"result": "RELEVANT"}
+
+
 # ── Brief quality score ──────────────────────────────────────────────────────
 
 @router.post("/briefs/score", response_model=BriefScoreResponse)

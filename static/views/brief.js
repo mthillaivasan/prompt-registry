@@ -8,9 +8,11 @@
   let tier3Count = 0; // question counter per step
   let briefScore = null; // { score, label, weakest_dimension, improvement_tip, dimensions }
   let restructuredBrief = null; // restructured text from Claude
-  let useRestructured = true; // default to restructured
+  let useRestructured = true;
   const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [],
     clientName: '', ownerName: '', ownerRole: '', skipped: [] };
+  window._briefConversation = [];
+  window._briefQuestionCount = {};
   let guardrailData = null;
   let briefId = null; // server-side brief ID once created
 
@@ -33,6 +35,7 @@
     state.constraints = []; state.selectedGuardrails = [];
     state.clientName = ''; state.ownerName = ''; state.ownerRole = ''; state.skipped = [];
     validationResult = null; tier3Count = 0; briefScore = null; restructuredBrief = null; useRestructured = true;
+    window._briefConversation = []; window._briefQuestionCount = {};
     guardrailData = null; briefId = null;
 
     // Resume existing brief — from params or localStorage
@@ -199,7 +202,8 @@
       }
       // Tier 3 — question with options
       if (validationResult && validationResult.tier === 3) {
-        const counterText = tier3Count === 1 ? 'One question — then we can move on.' : 'Last question on this — then we are ready.';
+        const qCount = window._briefQuestionCount[step] || 0;
+        const counterText = qCount <= 1 ? 'Question ' + qCount + ' of 2 on this topic — then we move on.' : 'Last question on this — then we move on.';
         html += `<div style="background:var(--surface2);border-left:3px solid var(--amber);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
           <div style="font-size:12px;color:var(--amber);margin-bottom:6px;font-family:var(--font-mono)">${counterText}</div>
           <div style="font-size:15px;color:var(--text);margin-bottom:10px;font-family:var(--font-heading)">${esc(validationResult.question || 'Help me understand this better')}</div>
@@ -207,10 +211,15 @@
         (validationResult.options || []).forEach(opt => {
           html += `<button class="btn btn-outline btn-sm" onclick="window._briefPickOption('${esc(opt)}')">${esc(opt)}</button>`;
         });
+        html += `<button class="btn btn-outline btn-sm" style="color:var(--text2);border-color:var(--border)" onclick="window._briefSkipQuestion()">Not applicable</button>`;
         html += `</div>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;margin-bottom:10px">
             <input type="text" id="brief-tier3-free" style="flex:1" placeholder="${esc(validationResult.free_text_placeholder || 'Or type your answer...')}">
             <button class="btn btn-gold btn-sm" onclick="window._briefSubmitFree()">Continue with this</button>
+          </div>
+          <div style="display:flex;gap:16px">
+            <a style="font-size:12px;color:var(--text2);cursor:pointer" onclick="window._briefSkipQuestion()">Skip this question</a>
+            <a style="font-size:12px;color:var(--text2);cursor:pointer" onclick="window._briefAbandonTrack()">Back to main topic</a>
           </div>
         </div>`;
       }
@@ -558,13 +567,32 @@
     step++; renderStep();
   };
   window._briefSkipSuggestion = function () {
+    window._briefConversation.push({ role: 'system', step, question: validationResult ? validationResult.suggestion : '', answer: 'skipped', skipped: true });
     validationResult = null; validationError = '';
     step++; renderStep();
   };
+  window._briefSkipQuestion = function () {
+    window._briefConversation.push({ role: 'system', step, question: validationResult ? validationResult.question : '', answer: 'skipped', skipped: true });
+    if (briefId) {
+      api('/briefs/' + briefId + '/skip-step/' + step, { method: 'POST' }).catch(() => {});
+    }
+    validationResult = null; validationError = ''; tier3Count = 0;
+    step++; renderStep();
+    toast('Question skipped');
+  };
+  window._briefAbandonTrack = function () {
+    window._briefConversation.push({ role: 'system', step, question: 'track', answer: 'abandoned', skipped: true });
+    if (briefId) {
+      api('/briefs/' + briefId + '/skip-step/' + step, { method: 'POST' }).catch(() => {});
+    }
+    validationResult = null; validationError = ''; tier3Count = 0;
+    step++; renderStep();
+    toast('Moved on');
+  };
   window._briefPickOption = function (opt) {
+    window._briefConversation.push({ role: 'system', step, question: validationResult ? validationResult.question : '', answer: opt, skipped: false });
     state.purpose = state.purpose.trim() + ' — ' + opt;
     validationResult = null; validationError = '';
-    // Re-validate with the enriched purpose
     renderStep();
     window._briefNext();
   };
@@ -572,6 +600,7 @@
     const el = document.getElementById('brief-tier3-free');
     const val = el ? el.value.trim() : '';
     if (!val) { toast('Enter an answer or tap an option above', 'error'); return; }
+    window._briefConversation.push({ role: 'system', step, question: validationResult ? validationResult.question : '', answer: val, skipped: false });
     state.purpose = state.purpose.trim() + ' — ' + val;
     validationResult = null; validationError = '';
     renderStep();
@@ -594,20 +623,30 @@
         if (state.outputType) history.push('Output type: ' + state.outputType);
         if (state.audience) history.push('Audience: ' + state.audience);
         if (state.constraints.length) history.push('Constraints: ' + state.constraints.join(', '));
-        const resp = await api('/prompts/validate-brief', { method: 'POST', body: { description: state.purpose, conversation_history: history } });
+        const resp = await api('/prompts/validate-brief', { method: 'POST', body: { description: state.purpose, conversation_history: window._briefConversation } });
         validationResult = resp;
         if (resp.tier === 1) {
-          // Strong — proceed
+          window._briefConversation.push({ role: 'system', step, question: 'validation', answer: 'accepted', skipped: false });
         } else if (resp.tier === 2) {
-          renderStep(); return;
+          // Check relevance before showing
+          try {
+            const rel = await api('/prompts/briefs/check-relevance', { method: 'POST', body: { conversation_history: window._briefConversation, proposed_question: resp.suggestion } });
+            if (rel.result === 'SKIP') { validationResult = null; /* proceed */ }
+            else { renderStep(); return; }
+          } catch (e) { renderStep(); return; }
         } else {
-          // Tier 3 — enforce question counter
-          tier3Count++;
-          if (tier3Count >= 3) {
-            // Third attempt — accept as tier 2, never ask again
-            validationResult = null;
+          // Tier 3 — enforce 2-question max per step
+          window._briefQuestionCount[step] = (window._briefQuestionCount[step] || 0) + 1;
+          tier3Count = window._briefQuestionCount[step];
+          if (tier3Count > 2) {
+            validationResult = null; // max reached, accept and proceed
           } else {
-            renderStep(); return;
+            // Check relevance before showing
+            try {
+              const rel = await api('/prompts/briefs/check-relevance', { method: 'POST', body: { conversation_history: window._briefConversation, proposed_question: resp.question } });
+              if (rel.result === 'SKIP') { validationResult = null; }
+              else { renderStep(); return; }
+            } catch (e) { renderStep(); return; }
           }
         }
       } catch (e) { /* proceed on failure */ }
