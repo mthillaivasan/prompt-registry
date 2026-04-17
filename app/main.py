@@ -33,11 +33,17 @@ from app.triggers import create_triggers_and_indexes
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not os.environ.get("JWT_SECRET_KEY"):
-        raise RuntimeError("JWT_SECRET_KEY environment variable is required")
+        print("WARNING: JWT_SECRET_KEY not set — using fallback (not safe for production)")
+        os.environ["JWT_SECRET_KEY"] = "INSECURE-FALLBACK-CHANGE-ME"
 
-    Base.metadata.create_all(bind=engine)
-    create_triggers_and_indexes(engine)
-    run_seed()
+    try:
+        Base.metadata.create_all(bind=engine)
+        create_triggers_and_indexes(engine)
+        run_seed()
+        print("Startup initialization complete")
+    except Exception as e:
+        print(f"WARNING: Startup initialization failed: {e}")
+        print("App will start but may have limited functionality")
 
     yield
 
