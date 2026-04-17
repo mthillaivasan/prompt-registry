@@ -315,11 +315,39 @@ class AuditLog(Base):
             "'Approved','DefectLogged','Corrected','InjectionDetected',"
             "'ValidationFailed','Accessed','PromptImported','UpgradeProposed',"
             "'UpgradeResponseRecorded','UpgradeApplied','UpgradeAbandoned',"
-            "'ClassificationOverridden','PromptGenerated')",
+            "'ClassificationOverridden','PromptGenerated',"
+            "'BriefCreated','BriefUpdated','BriefAbandoned','BriefCompleted')",
             name="ck_al_action",
         ),
         CheckConstraint(
-            "entity_type IN ('Prompt','PromptVersion','ComplianceCheck','User','UpgradeProposal')",
+            "entity_type IN ('Prompt','PromptVersion','ComplianceCheck','User','UpgradeProposal','Brief')",
             name="ck_al_entity_type",
+        ),
+    )
+
+
+class Brief(Base):
+    __tablename__ = "briefs"
+
+    brief_id = Column(String(36), primary_key=True, default=_uuid)
+    status = Column(String, nullable=False, default="In Progress")
+    quality_score = Column(Integer, nullable=False, default=0)
+    step_progress = Column(Integer, nullable=False, default=1)
+    client_name = Column(String, nullable=True)
+    business_owner_name = Column(String, nullable=True)
+    business_owner_role = Column(String, nullable=True)
+    brief_builder_id = Column(String(36), ForeignKey("users.user_id"), nullable=False)
+    step_answers = Column(Text, nullable=False, default="{}")
+    selected_guardrails = Column(Text, nullable=False, default="[]")
+    restructured_brief = Column(Text, nullable=True)
+    created_at = Column(String, nullable=False, default=_utcnow)
+    updated_at = Column(String, nullable=False, default=_utcnow)
+    submitted_at = Column(String, nullable=True)
+    resulting_prompt_id = Column(String(36), ForeignKey("prompts.prompt_id"), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('In Progress','Complete','Abandoned','Archived')",
+            name="ck_briefs_status",
         ),
     )

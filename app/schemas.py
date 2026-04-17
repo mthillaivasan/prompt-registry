@@ -151,6 +151,45 @@ class RestructureBriefResponse(BaseModel):
     restructured: str
 
 
+# ── Brief schemas ───────────────────────────────────────────────────────────
+
+class BriefCreate(BaseModel):
+    client_name: str | None = None
+    business_owner_name: str | None = None
+    business_owner_role: str | None = None
+
+
+class BriefUpdate(BaseModel):
+    step_progress: int | None = None
+    step_answers: dict | None = None
+    selected_guardrails: list[str] | None = None
+    quality_score: int | None = None
+    restructured_brief: str | None = None
+    client_name: str | None = None
+    business_owner_name: str | None = None
+    business_owner_role: str | None = None
+
+
+class BriefOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    brief_id: str
+    status: str
+    quality_score: int
+    step_progress: int
+    client_name: str | None
+    business_owner_name: str | None
+    business_owner_role: str | None
+    brief_builder_id: str
+    step_answers: str
+    selected_guardrails: str
+    restructured_brief: str | None
+    created_at: str
+    updated_at: str
+    submitted_at: str | None
+    resulting_prompt_id: str | None
+
+
 # ── Compliance schemas ───────────────────────────────────────────────────────
 
 class ComplianceCheckRequest(BaseModel):

@@ -9,8 +9,10 @@
   let briefScore = null; // { score, label, weakest_dimension, improvement_tip, dimensions }
   let restructuredBrief = null; // restructured text from Claude
   let useRestructured = true; // default to restructured
-  const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [] };
+  const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [],
+    clientName: '', ownerName: '', ownerRole: '' };
   let guardrailData = null;
+  let briefId = null; // server-side brief ID once created
 
   const INPUT_OPTIONS = ['Form responses', 'Document or report', 'Data table', 'Email thread', 'Free text', 'Structured data', 'Meeting notes', 'Other'];
   const OUTPUT_OPTIONS = ['Structured assessment', 'Executive summary', 'Briefing note', 'Recommendation', 'Flag report', 'Draft email or communication', 'Data extraction', 'Comparison table', 'Other'];
@@ -25,12 +27,33 @@
     'Third-party AI platform (not internal)',
   ];
 
-  viewInits.brief = function () {
+  viewInits.brief = async function (params) {
     step = 1; validationError = '';
     state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
     state.constraints = []; state.selectedGuardrails = [];
+    state.clientName = ''; state.ownerName = ''; state.ownerRole = '';
     validationResult = null; tier3Count = 0; briefScore = null; restructuredBrief = null; useRestructured = true;
-    guardrailData = null;
+    guardrailData = null; briefId = null;
+
+    // Resume existing brief
+    if (params && params.briefId) {
+      try {
+        const b = await api('/briefs/' + params.briefId);
+        briefId = b.brief_id;
+        step = b.step_progress || 1;
+        state.clientName = b.client_name || '';
+        state.ownerName = b.business_owner_name || '';
+        state.ownerRole = b.business_owner_role || '';
+        briefScore = b.quality_score ? { score: b.quality_score, label: '', weakest_dimension: '', improvement_tip: '' } : null;
+        const answers = JSON.parse(b.step_answers || '{}');
+        state.purpose = answers.purpose || '';
+        state.inputType = answers.inputType || '';
+        state.outputType = answers.outputType || '';
+        state.audience = answers.audience || '';
+        state.constraints = answers.constraints || [];
+        state.selectedGuardrails = JSON.parse(b.selected_guardrails || '[]');
+      } catch (e) { /* start fresh */ }
+    }
     renderStep();
   };
 
@@ -91,6 +114,11 @@
       const charCount = state.purpose.length;
       const isValid = charCount >= 20;
       html += `<h3 style="margin-bottom:12px">What does this prompt need to do?</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="form-group"><label>Client</label><input type="text" id="brief-client" value="${esc(state.clientName)}" placeholder="e.g. Lombard Odier" onchange="window._briefMeta('clientName',this.value)"></div>
+          <div class="form-group"><label>Business owner</label><input type="text" id="brief-owner" value="${esc(state.ownerName)}" placeholder="e.g. Sarah Chen" onchange="window._briefMeta('ownerName',this.value)"></div>
+          <div class="form-group"><label>Role</label><input type="text" id="brief-role" value="${esc(state.ownerRole)}" placeholder="e.g. Head of Settlement" onchange="window._briefMeta('ownerRole',this.value)"></div>
+        </div>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Describe in one or two sentences what you want the AI to do.</p>
         <div class="form-group">
           <textarea id="brief-purpose" rows="4" oninput="window._briefPurposeInput(this.value)" placeholder="e.g. Summarise incoming customer complaints and flag any that mention regulatory obligations or potential liability.">${esc(state.purpose)}</textarea>
@@ -382,7 +410,36 @@
     renderReview();
   };
 
+  // Server persistence
+  async function saveBriefToServer() {
+    const answers = {
+      purpose: state.purpose, inputType: state.inputType, outputType: state.outputType,
+      audience: state.audience, constraints: state.constraints,
+    };
+    const body = {
+      step_progress: step,
+      step_answers: answers,
+      selected_guardrails: state.selectedGuardrails,
+      quality_score: briefScore ? briefScore.score : 0,
+      client_name: state.clientName || null,
+      business_owner_name: state.ownerName || null,
+      business_owner_role: state.ownerRole || null,
+    };
+    try {
+      if (!briefId) {
+        const created = await api('/briefs', { method: 'POST', body: {
+          client_name: state.clientName || null,
+          business_owner_name: state.ownerName || null,
+          business_owner_role: state.ownerRole || null,
+        }});
+        briefId = created.brief_id;
+      }
+      await api('/briefs/' + briefId, { method: 'PATCH', body });
+    } catch (e) { console.warn('Brief save failed:', e.message); }
+  }
+
   // Exposed handlers
+  window._briefMeta = function (field, val) { state[field] = val; };
   window._briefSelect = function (field, val) { state[field] = val; validationError = ''; renderStep(); };
   window._briefToggle = function (opt, checked) {
     if (checked && !state.constraints.includes(opt)) state.constraints.push(opt);
@@ -461,12 +518,14 @@
     validationError = ''; validationResult = null; tier3Count = 0;
     step++;
     await updateScore();
+    await saveBriefToServer();
     if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
     else renderStep();
   };
   window._briefReview = async function () {
     saveStepState();
     await updateScore();
+    await saveBriefToServer();
     await loadRestructuredBrief();
     renderReview();
   };
@@ -538,6 +597,12 @@
     if (step === 1) {
       const el = document.getElementById('brief-purpose');
       if (el) state.purpose = el.value.trim();
+      const c = document.getElementById('brief-client');
+      if (c) state.clientName = c.value.trim();
+      const o = document.getElementById('brief-owner');
+      if (o) state.ownerName = o.value.trim();
+      const r = document.getElementById('brief-role');
+      if (r) state.ownerRole = r.value.trim();
     }
   }
 })();

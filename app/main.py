@@ -11,6 +11,7 @@ from app.database import Base, engine, get_db
 from app.dependencies import get_current_user
 from app.models import (  # noqa: F401 — imports register all models with Base
     AuditLog,
+    Brief,
     ComplianceCheck,
     ComplianceCheckJob,
     InjectionPattern,
@@ -21,6 +22,7 @@ from app.models import (  # noqa: F401 — imports register all models with Base
     User,
 )
 from app.routers import auth as auth_router
+from app.routers import briefs as briefs_router
 from app.routers import compliance as compliance_router
 from app.routers import health as health_router
 from app.routers import prompts as prompts_router
@@ -89,6 +91,7 @@ def list_audit_log(
 
 app.include_router(auth_router.router)
 app.include_router(health_router.router)
+app.include_router(briefs_router.router)
 app.include_router(compliance_router.router)
 app.include_router(prompts_router.router)
 app.include_router(upgrade_router.router)
