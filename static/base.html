@@ -162,11 +162,23 @@ label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
 </div>
 </div>
 
+<div id="nav-warn-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:250;align-items:center;justify-content:center">
+<div class="card" style="max-width:420px;text-align:center;margin:auto">
+  <h3 style="margin-bottom:8px">Leave Brief Builder?</h3>
+  <p style="color:var(--text2);font-size:14px;margin-bottom:20px">Your progress has been saved. You can return to this brief from the Dashboard.</p>
+  <div style="display:flex;gap:12px;justify-content:center">
+    <button class="btn btn-gold" id="nav-warn-leave">Leave</button>
+    <button class="btn btn-outline" onclick="document.getElementById('nav-warn-overlay').style.display='none'">Continue Brief</button>
+  </div>
+</div>
+</div>
 <div id="toast" class="toast"></div>
 
 <script>
 let authToken = localStorage.getItem('pr_token');
 let currentUser = null;
+window._inBrief = false;
+window._briefHasContent = false;
 
 function isTokenValid(token) {
   if (!token) return false;
@@ -247,7 +259,22 @@ function navigate(view, params = {}) {
 }
 
 document.querySelectorAll('.nav-links a').forEach(a => {
-  a.addEventListener('click', e => { e.preventDefault(); navigate(a.dataset.view); });
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const target = a.dataset.view;
+    if (window._inBrief && window._briefHasContent && target !== 'brief') {
+      const overlay = document.getElementById('nav-warn-overlay');
+      overlay.style.display = 'flex';
+      document.getElementById('nav-warn-leave').onclick = () => {
+        overlay.style.display = 'none';
+        window._inBrief = false;
+        window._briefHasContent = false;
+        navigate(target);
+      };
+    } else {
+      navigate(target);
+    }
+  });
 });
 
 // Auth
@@ -268,7 +295,15 @@ async function doLogin() {
 }
 
 function doLogout() {
+  // Preserve brief state before logout
+  if (window._inBrief && window._briefHasContent) {
+    try {
+      const ta = document.getElementById('brief-purpose');
+      if (ta) localStorage.setItem('brief_recovery_purpose', ta.value);
+    } catch (e) {}
+  }
   authToken = null; localStorage.removeItem('pr_token');
+  window._inBrief = false;
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('login-screen').style.display = 'block';
 }
@@ -276,8 +311,34 @@ function doLogout() {
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
+  startTokenRefresh();
   navigate('dashboard');
 }
+
+// Silent token refresh every 30 minutes
+let _refreshInterval = null;
+function startTokenRefresh() {
+  if (_refreshInterval) clearInterval(_refreshInterval);
+  _refreshInterval = setInterval(async () => {
+    if (!isTokenValid(authToken)) return;
+    try {
+      const res = await fetch('/auth/refresh', { method: 'POST', headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' } });
+      if (res.ok) {
+        const data = await res.json();
+        authToken = data.access_token;
+        localStorage.setItem('pr_token', authToken);
+      }
+    } catch (e) {}
+  }, 30 * 60 * 1000);
+}
+
+// Browser tab close warning
+window.addEventListener('beforeunload', (e) => {
+  if (window._inBrief && window._briefHasContent) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 async function pollJob(jobId, interval = 1000, max = 30) {
   for (let i = 0; i < max; i++) {
@@ -579,11 +640,11 @@ function showHelpSection(id){document.querySelectorAll('.help-section').forEach(
 </div>
 </div>
 
-<script src="/static/views/dashboard.js?v=16"></script>
-<script src="/static/views/detail.js?v=16"></script>
-<script src="/static/views/generator.js?v=16"></script>
-<script src="/static/views/brief.js?v=16"></script>
-<script src="/static/views/import.js?v=16"></script>
-<script src="/static/views/audit.js?v=16"></script>
+<script src="/static/views/dashboard.js?v=17"></script>
+<script src="/static/views/detail.js?v=17"></script>
+<script src="/static/views/generator.js?v=17"></script>
+<script src="/static/views/brief.js?v=17"></script>
+<script src="/static/views/import.js?v=17"></script>
+<script src="/static/views/audit.js?v=17"></script>
 </body>
 </html>

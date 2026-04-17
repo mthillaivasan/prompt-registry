@@ -87,6 +87,8 @@
         localStorage.removeItem('pr_active_brief');
       }
     }
+    window._inBrief = true;
+    window._briefHasContent = false;
     renderStep();
   };
 
@@ -521,6 +523,8 @@
     state.purpose = val;
     validationError = '';
     validationResult = null;
+    if (val.length > 0) window._briefHasContent = true;
+    localStorage.setItem('brief_step_1_draft', val);
     const btn = document.getElementById('brief-next-btn');
     if (btn) {
       if (val.length >= 20) { btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.style.pointerEvents = 'auto'; }
@@ -591,6 +595,8 @@
   };
   window._briefReview = async function () {
     saveStepState();
+    window._inBrief = false;
+    window._briefHasContent = false;
     await updateScore();
     await saveBriefToServer();
     await loadRestructuredBrief();
@@ -626,8 +632,9 @@
   };
 
   window._briefSend = function () {
+    window._inBrief = false;
+    window._briefHasContent = false;
     const guardrails = [...state.selectedGuardrails];
-    // Mark brief as complete and clear active brief
     if (briefId) {
       api('/briefs/' + briefId + '/complete', { method: 'POST' }).catch(() => {});
     }

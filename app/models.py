@@ -316,7 +316,7 @@ class AuditLog(Base):
             "'ValidationFailed','Accessed','PromptImported','UpgradeProposed',"
             "'UpgradeResponseRecorded','UpgradeApplied','UpgradeAbandoned',"
             "'ClassificationOverridden','PromptGenerated',"
-            "'BriefCreated','BriefUpdated','BriefAbandoned','BriefCompleted','BriefStepSkipped')",
+            "'BriefCreated','BriefUpdated','BriefAbandoned','BriefCompleted','BriefStepSkipped','TokenRefreshed')",
             name="ck_al_action",
         ),
         CheckConstraint(
