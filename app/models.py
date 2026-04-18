@@ -294,7 +294,7 @@ class AuditLog(Base):
     timestamp = Column(
         String,
         nullable=False,
-        server_default=text("(strftime('%Y-%m-%dT%H:%M:%SZ','now'))"),
+        default=_utcnow,
     )
     user_id = Column(String, nullable=True)     # user UUID or literal 'SYSTEM'
     action = Column(String, nullable=False)
