@@ -178,7 +178,10 @@ def validate_brief(
             )
     except Exception as e:
         print(f"WARNING: Brief validation failed: {e}")
-        return ValidateBriefResponse(tier=1, accepted=True)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Brief validation unavailable: {e}",
+        )
 
 
 # ── Brief question relevance check ───────────────────────────────────────────
