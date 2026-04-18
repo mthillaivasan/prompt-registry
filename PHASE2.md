@@ -58,27 +58,37 @@ The build spec references model `claude-sonnet-4-20250514`. If this identifier i
 
 ## Brief Builder flow redesign
 
-Observation from smoke-testing on 18 April: the Brief Builder asks for free-text description first, then structured fields (input type, output type, audience, deployment target) later. This is backward.
+Observation from smoke-testing on 18 April: the current Brief Builder asks for free-text description first, then structured fields later. This is backward. Users describe without scaffolding, which encourages vague language ("summarise documents", "useful data for core systems"). The generator then receives a brief where the structured fields and the free-text description are misaligned, and the output quality suffers — a brief about "determine from fund prospectus whether [X]" produced a generic AI-governance-assessment prompt because template selection by prompt_type overrode semantic content.
 
-**Implications:**
+### Proposed sequence
 
-1. Validation questions on the initial description are premature — they ask the user to solve specificity that the next steps are designed to address.
-2. Users describe without scaffolding, which encourages vague language.
-3. The generator receives a brief where structured fields and free-text description are misaligned, because they were gathered out of sequence.
-4. The generator's output quality suffers — a brief about "determine from fund prospectus whether [X]" produced a generic AI-governance-assessment prompt because the template selection overrode the semantic content.
+1. **Input** — what document or data goes in (with placeholder examples)
+2. **Purpose** — what the AI does with it (cognitive work only, not output shape; with placeholder examples)
+3. **Output format** — what shape comes out (structured choice plus placeholder for specifics, separate from purpose)
+4. **Brief text** — free-form elaboration, now grounded by 1, 2, and 3 (with placeholder)
+5. **Regulations and ISO standards** — guardrails, auto-suggested from prior steps, user can adjust
 
-**Proposed redesign:**
+### Design principle
 
-1. Structured fields first (dropdowns, fast)
-2. Purpose free-text (now framed by choices already made)
-3. Validation AFTER purpose (now meaningful)
-4. Guardrail selection (auto-suggested from structured + purpose)
-5. Review and restructure
-6. Generate
+One concept per step. Each step narrow enough to have meaningful placeholder examples. Each step's answer informs the next. Compound questions (purpose + output in one step) produce vague answers. Separating them produces specific answers at each step.
 
-This changes P3 (three-tier coaching) materially — polishing coaching on a wrongly-ordered flow is the wrong priority. Reconsider P3 after flow redesign.
+Placeholders act as coaching-by-example at every step. This may reduce or eliminate the need for the separate three-tier validation layer (P3), because users are guided into specificity by example before typing.
 
-Estimate: flow redesign is 4-6 hours frontend + 1-2 hours backend. Significantly higher than P3 as originally scoped.
+### Open questions
+
+- Does the current three-tier validation (P3) survive the redesign at all, or does it become unnecessary?
+- Where does "audience" live? Inside purpose, inside output format, or as its own step?
+- Should guardrail selection be auto-suggested with "adjust" option, or require explicit review?
+
+### Scope and priority
+
+Scope: frontend redesign of Brief Builder, placeholder content library, new data flow from structured steps into generator. Estimate: 4-6 hours frontend, 1-2 hours backend.
+
+Priority: reconsider before continuing with P3 (three-tier coaching) and P4 (quality dial) as currently specified. This redesign may supersede both.
+
+### Broader pattern
+
+The "one concept per step" principle applies beyond the Brief Builder. Audit other user-facing forms for places that ask about multiple things at once — those are places where output quality is likely degrading.
 
 ---
 
