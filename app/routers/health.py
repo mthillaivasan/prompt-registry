@@ -15,7 +15,6 @@ async def health():
             "status": "ok",
             "database": db_type,
             "anthropic_key_set": bool(key),
-            "anthropic_key_prefix": key[:15] if key else "not set",
         }
     except Exception as e:
         return {
