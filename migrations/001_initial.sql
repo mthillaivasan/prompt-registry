@@ -1,21 +1,31 @@
--- Prompt Registry — Initial Schema
--- Postgres-compatible reference migration.
--- For local development SQLite is used; this file is the production target.
--- Run once against a clean Postgres database.
+-- Prompt Registry — Authoritative Schema
+-- Postgres-compatible. Matches app/models.py exactly.
+--
+-- This file is the single source of truth for the production schema.
+-- Run once against a clean Postgres database, or use the companion
+-- reconciliation script (scripts/verify_schema.py) to detect drift.
+--
+-- Last synced with models.py: 2026-04-18
 
 -- ── Extensions ────────────────────────────────────────────────────────────────
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";  -- gen_random_uuid()
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- TABLES — ordered to satisfy foreign key dependencies
+-- ══════════════════════════════════════════════════════════════════════════════
 
 -- ── users ─────────────────────────────────────────────────────────────────────
 CREATE TABLE users (
     user_id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     email           TEXT UNIQUE NOT NULL,
     name            TEXT NOT NULL,
-    role            TEXT NOT NULL CHECK (role IN ('Author','Approver','Auditor','Admin','SuperAdmin')),
+    role            TEXT NOT NULL,
     password_hash   TEXT NOT NULL,
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_login_at   TIMESTAMPTZ
+    created_at      TEXT NOT NULL,
+    last_login_at   TEXT,
+
+    CONSTRAINT ck_users_role CHECK (role IN ('Maker','Checker','Admin'))
 );
 
 -- ── scoring_dimensions ────────────────────────────────────────────────────────
@@ -23,7 +33,7 @@ CREATE TABLE scoring_dimensions (
     dimension_id        TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     code                TEXT UNIQUE NOT NULL,
     name                TEXT NOT NULL,
-    framework           TEXT NOT NULL CHECK (framework IN ('REGULATORY','OWASP','NIST','ISO42001')),
+    framework           TEXT NOT NULL,
     source_reference    TEXT,
     description         TEXT NOT NULL,
     score_5_criteria    TEXT NOT NULL,
@@ -33,44 +43,68 @@ CREATE TABLE scoring_dimensions (
     blocking_threshold  INTEGER NOT NULL DEFAULT 2,
     applies_to_types    TEXT NOT NULL DEFAULT '[]',
     applies_if          TEXT,
-    scoring_type        TEXT NOT NULL CHECK (scoring_type IN ('Blocking','Advisory','Maturity','Alignment')),
+    scoring_type        TEXT NOT NULL,
     is_active           BOOLEAN NOT NULL DEFAULT TRUE,
-    sort_order          INTEGER NOT NULL DEFAULT 0
+    sort_order          INTEGER NOT NULL DEFAULT 0,
+    tier                INTEGER NOT NULL DEFAULT 3,
+    tier2_trigger       TEXT,
+
+    CONSTRAINT ck_sd_framework
+        CHECK (framework IN ('REGULATORY','OWASP','NIST','ISO42001')),
+    CONSTRAINT ck_sd_scoring_type
+        CHECK (scoring_type IN ('Blocking','Advisory','Maturity','Alignment')),
+    CONSTRAINT ck_sd_tier
+        CHECK (tier IN (1, 2, 3))
 );
 
 -- ── injection_patterns ────────────────────────────────────────────────────────
 CREATE TABLE injection_patterns (
     pattern_id    TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    category      TEXT NOT NULL CHECK (category IN (
-                      'Instruction override','Persona hijack','Exfiltration',
-                      'Delimiter attack','Unicode manipulation','Structural anomaly')),
+    category      TEXT NOT NULL,
     pattern_text  TEXT NOT NULL,
-    match_type    TEXT NOT NULL CHECK (match_type IN ('substring','regex','unicode_range')),
-    severity      TEXT NOT NULL CHECK (severity IN ('Critical','High','Medium')),
+    match_type    TEXT NOT NULL,
+    severity      TEXT NOT NULL,
     description   TEXT NOT NULL,
     is_active     BOOLEAN NOT NULL DEFAULT TRUE,
-    source        TEXT NOT NULL CHECK (source IN ('OWASP_ATLAS','MITRE_ATLAS','INTERNAL'))
+    source        TEXT NOT NULL,
+
+    CONSTRAINT ck_ip_category
+        CHECK (category IN (
+            'Instruction override','Persona hijack','Exfiltration',
+            'Delimiter attack','Unicode manipulation','Structural anomaly')),
+    CONSTRAINT ck_ip_match_type
+        CHECK (match_type IN ('substring','regex','unicode_range')),
+    CONSTRAINT ck_ip_severity
+        CHECK (severity IN ('Critical','High','Medium')),
+    CONSTRAINT ck_ip_source
+        CHECK (source IN ('OWASP_ATLAS','MITRE_ATLAS','INTERNAL'))
 );
 
 -- ── prompts ───────────────────────────────────────────────────────────────────
 CREATE TABLE prompts (
     prompt_id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     title                TEXT NOT NULL,
-    prompt_type          TEXT NOT NULL CHECK (prompt_type IN (
-                             'Governance','Analysis','Comms','Classification',
-                             'Summarisation','Extraction','Comparison','Risk Review')),
+    prompt_type          TEXT NOT NULL,
     deployment_target    TEXT NOT NULL,
     input_type           TEXT NOT NULL,
     output_type          TEXT NOT NULL,
-    risk_tier            TEXT NOT NULL CHECK (risk_tier IN ('Minimal','Limited','High','Prohibited')),
+    risk_tier            TEXT NOT NULL,
     owner_id             TEXT NOT NULL REFERENCES users(user_id),
     approver_id          TEXT REFERENCES users(user_id),
-    status               TEXT NOT NULL DEFAULT 'Draft'
-                             CHECK (status IN ('Draft','Active','Review Required','Suspended','Retired')),
+    status               TEXT NOT NULL DEFAULT 'Draft',
     review_cadence_days  INTEGER NOT NULL DEFAULT 365,
-    next_review_date     TIMESTAMPTZ,
-    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    next_review_date     TEXT,
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL,
+
+    CONSTRAINT ck_prompts_risk_tier
+        CHECK (risk_tier IN ('Minimal','Limited','High','Prohibited')),
+    CONSTRAINT ck_prompts_status
+        CHECK (status IN ('Draft','Active','Review Required','Suspended','Retired')),
+    CONSTRAINT ck_prompts_type
+        CHECK (prompt_type IN (
+            'Governance','Analysis','Comms','Classification',
+            'Summarisation','Extraction','Comparison','Risk Review'))
 );
 
 -- ── upgrade_proposals ─────────────────────────────────────────────────────────
@@ -80,23 +114,29 @@ CREATE TABLE upgrade_proposals (
     proposal_id                TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     prompt_id                  TEXT REFERENCES prompts(prompt_id),
     source_version_id          TEXT,
-    proposed_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    proposed_at                TEXT NOT NULL,
     proposed_by                TEXT NOT NULL DEFAULT 'SYSTEM',
-    status                     TEXT NOT NULL DEFAULT 'Pending'
-                                   CHECK (status IN ('Pending','Partially Accepted','Accepted',
-                                                     'Rejected','Applied','Abandoned')),
+    status                     TEXT NOT NULL DEFAULT 'Pending',
     inferred_purpose           TEXT,
     inferred_prompt_type       TEXT,
     inferred_risk_tier         TEXT,
-    classification_confidence  TEXT CHECK (classification_confidence IN ('Low','Medium','High')),
+    classification_confidence  TEXT,
     findings                   TEXT,
     suggestions                TEXT,
     user_responses             TEXT,
-    responses_recorded_at      TIMESTAMPTZ,
+    responses_recorded_at      TEXT,
     resulting_version_id       TEXT,
-    applied_at                 TIMESTAMPTZ,
+    applied_at                 TEXT,
     applied_by                 TEXT REFERENCES users(user_id),
-    abandoned_reason           TEXT
+    abandoned_reason           TEXT,
+
+    CONSTRAINT ck_up_status
+        CHECK (status IN (
+            'Pending','Partially Accepted','Accepted',
+            'Rejected','Applied','Abandoned')),
+    CONSTRAINT ck_up_confidence
+        CHECK (classification_confidence IN ('Low','Medium','High')
+               OR classification_confidence IS NULL)
 );
 
 -- ── compliance_checks ─────────────────────────────────────────────────────────
@@ -105,17 +145,21 @@ CREATE TABLE compliance_checks (
     check_id                 TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     version_id               TEXT NOT NULL,
     job_id                   TEXT,
-    run_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    run_at                   TEXT NOT NULL,
     run_by                   TEXT NOT NULL,
-    overall_result           TEXT CHECK (overall_result IN ('Pass','Pass with warnings','Fail')),
+    overall_result           TEXT,
     scores                   TEXT,
     blocking_defects         INTEGER NOT NULL DEFAULT 0,
     gold_standard            TEXT,
     flags                    TEXT,
     human_reviewed_by        TEXT REFERENCES users(user_id),
-    human_reviewed_at        TIMESTAMPTZ,
+    human_reviewed_at        TEXT,
     human_review_notes       TEXT,
-    output_validation_result TEXT
+    output_validation_result TEXT,
+
+    CONSTRAINT ck_cc_result
+        CHECK (overall_result IN ('Pass','Pass with warnings','Fail')
+               OR overall_result IS NULL)
 );
 
 -- ── compliance_check_jobs ─────────────────────────────────────────────────────
@@ -123,14 +167,16 @@ CREATE TABLE compliance_check_jobs (
     job_id        TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     version_id    TEXT NOT NULL,
     requested_by  TEXT NOT NULL REFERENCES users(user_id),
-    requested_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    status        TEXT NOT NULL DEFAULT 'Queued'
-                      CHECK (status IN ('Queued','Running','Complete','Failed')),
-    started_at    TIMESTAMPTZ,
-    completed_at  TIMESTAMPTZ,
+    requested_at  TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'Queued',
+    started_at    TEXT,
+    completed_at  TEXT,
     result_id     TEXT REFERENCES compliance_checks(check_id),
     error_message TEXT,
-    force_refresh BOOLEAN NOT NULL DEFAULT FALSE
+    force_refresh BOOLEAN NOT NULL DEFAULT FALSE,
+
+    CONSTRAINT ck_ccj_status
+        CHECK (status IN ('Queued','Running','Complete','Failed'))
 );
 
 -- ── prompt_versions ───────────────────────────────────────────────────────────
@@ -143,42 +189,114 @@ CREATE TABLE prompt_versions (
     change_summary         TEXT,
     defects_found          TEXT NOT NULL DEFAULT '[]',
     corrections_made       TEXT NOT NULL DEFAULT '[]',
-    compliance_check_id    TEXT REFERENCES compliance_checks(check_id),
+    compliance_check_id    TEXT,
     regulatory_scores      TEXT,
     cache_valid            BOOLEAN NOT NULL DEFAULT TRUE,
-    upgrade_proposal_id    TEXT REFERENCES upgrade_proposals(proposal_id),
+    upgrade_proposal_id    TEXT,
     injection_scan_result  TEXT,
     created_by             TEXT NOT NULL REFERENCES users(user_id),
-    created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at             TEXT NOT NULL,
     approved_by            TEXT REFERENCES users(user_id),
-    approved_at            TIMESTAMPTZ,
+    approved_at            TEXT,
     is_active              BOOLEAN NOT NULL DEFAULT FALSE,
-    UNIQUE (prompt_id, version_number)
+
+    CONSTRAINT uq_pv_prompt_version UNIQUE (prompt_id, version_number)
 );
 
 -- ── audit_log ─────────────────────────────────────────────────────────────────
 CREATE TABLE audit_log (
     log_id       TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    timestamp    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    timestamp    TEXT NOT NULL DEFAULT NOW()::TEXT,
     user_id      TEXT,
-    action       TEXT NOT NULL CHECK (action IN (
-                     'Created','Edited','Activated','Retired','ComplianceChecked',
-                     'Approved','DefectLogged','Corrected','InjectionDetected',
-                     'ValidationFailed','Accessed','PromptImported','UpgradeProposed',
-                     'UpgradeResponseRecorded','UpgradeApplied','UpgradeAbandoned',
-                     'ClassificationOverridden')),
-    entity_type  TEXT NOT NULL CHECK (entity_type IN (
-                     'Prompt','PromptVersion','ComplianceCheck','User','UpgradeProposal')),
+    action       TEXT NOT NULL,
+    entity_type  TEXT NOT NULL,
     entity_id    TEXT NOT NULL,
     detail       TEXT,
     ip_address   TEXT,
     session_id   TEXT,
     resolved     BOOLEAN NOT NULL DEFAULT FALSE,
-    resolved_at  TIMESTAMPTZ,
-    resolved_by  TEXT REFERENCES users(user_id)
+    resolved_at  TEXT,
+    resolved_by  TEXT REFERENCES users(user_id),
+
+    CONSTRAINT ck_al_action CHECK (action IN (
+        'Created','Edited','Activated','Retired','ComplianceChecked',
+        'Approved','DefectLogged','Corrected','InjectionDetected',
+        'ValidationFailed','Accessed','PromptImported','UpgradeProposed',
+        'UpgradeResponseRecorded','UpgradeApplied','UpgradeAbandoned',
+        'ClassificationOverridden','PromptGenerated',
+        'BriefCreated','BriefUpdated','BriefAbandoned','BriefCompleted',
+        'BriefStepSkipped','BriefQuestionSkipped','BriefTrackAbandoned',
+        'TokenRefreshed')),
+    CONSTRAINT ck_al_entity_type CHECK (entity_type IN (
+        'Prompt','PromptVersion','ComplianceCheck','User',
+        'UpgradeProposal','Brief'))
 );
 
--- ── Deferred foreign keys (circular references) ───────────────────────────────
+-- ── briefs ────────────────────────────────────────────────────────────────────
+CREATE TABLE briefs (
+    brief_id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    status                TEXT NOT NULL DEFAULT 'In Progress',
+    quality_score         INTEGER NOT NULL DEFAULT 0,
+    step_progress         INTEGER NOT NULL DEFAULT 1,
+    client_name           TEXT,
+    business_owner_name   TEXT,
+    business_owner_role   TEXT,
+    brief_builder_id      TEXT NOT NULL REFERENCES users(user_id),
+    interviewer_id        TEXT REFERENCES users(user_id),
+    step_answers          TEXT NOT NULL DEFAULT '{}',
+    selected_guardrails   TEXT NOT NULL DEFAULT '[]',
+    restructured_brief    TEXT,
+    created_at            TEXT NOT NULL,
+    updated_at            TEXT NOT NULL,
+    submitted_at          TEXT,
+    resulting_prompt_id   TEXT REFERENCES prompts(prompt_id),
+
+    CONSTRAINT ck_briefs_status
+        CHECK (status IN ('In Progress','Complete','Abandoned','Archived'))
+);
+
+-- ── prompt_components ─────────────────────────────────────────────────────────
+CREATE TABLE prompt_components (
+    component_id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    code                  TEXT UNIQUE NOT NULL,
+    category              TEXT NOT NULL,
+    name                  TEXT NOT NULL,
+    description           TEXT NOT NULL,
+    component_text        TEXT NOT NULL,
+    example_output        TEXT,
+    applicable_dimensions TEXT NOT NULL DEFAULT '[]',
+    is_active             BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order            INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT ck_pc_category
+        CHECK (category IN (
+            'InputHandling','OutputFormat','RegulatoryGuardrail','Behavioural'))
+);
+
+-- ── prompt_templates ──────────────────────────────────────────────────────────
+CREATE TABLE prompt_templates (
+    template_id                TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    code                       TEXT UNIQUE NOT NULL,
+    name                       TEXT NOT NULL,
+    description                TEXT NOT NULL,
+    use_case                   TEXT,
+    prompt_type                TEXT NOT NULL,
+    risk_tier                  TEXT NOT NULL DEFAULT 'Limited',
+    input_type                 TEXT,
+    output_type                TEXT,
+    component_codes            TEXT NOT NULL DEFAULT '[]',
+    prompt_text                TEXT,
+    output_example             TEXT,
+    gold_standard_grade        TEXT,
+    applicable_to_client_types TEXT,
+    is_active                  BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order                 INTEGER NOT NULL DEFAULT 0
+);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- DEFERRED FOREIGN KEYS (circular references)
+-- ══════════════════════════════════════════════════════════════════════════════
+
 ALTER TABLE upgrade_proposals
     ADD CONSTRAINT fk_up_source_version
         FOREIGN KEY (source_version_id) REFERENCES prompt_versions(version_id),
@@ -193,17 +311,24 @@ ALTER TABLE compliance_check_jobs
     ADD CONSTRAINT fk_ccj_version
         FOREIGN KEY (version_id) REFERENCES prompt_versions(version_id);
 
--- ── Indexes ───────────────────────────────────────────────────────────────────
+-- ══════════════════════════════════════════════════════════════════════════════
+-- INDEXES
+-- ══════════════════════════════════════════════════════════════════════════════
+
 -- Only one active version per prompt
-CREATE UNIQUE INDEX idx_one_active_version_per_prompt
+CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_version_per_prompt
     ON prompt_versions (prompt_id)
     WHERE is_active = TRUE;
 
--- ── Trigger: AuditLog timestamp set at DB level ───────────────────────────────
+-- ══════════════════════════════════════════════════════════════════════════════
+-- TRIGGERS
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- ── AuditLog — set timestamp on insert ──────────────────────────────────────
 CREATE OR REPLACE FUNCTION fn_set_audit_timestamp()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-    NEW.timestamp := NOW();
+    NEW.timestamp := NOW()::TEXT;
     RETURN NEW;
 END;
 $$;
@@ -212,7 +337,7 @@ CREATE TRIGGER trg_audit_log_timestamp
     BEFORE INSERT ON audit_log
     FOR EACH ROW EXECUTE FUNCTION fn_set_audit_timestamp();
 
--- ── Trigger: AuditLog — prevent deletion ─────────────────────────────────────
+-- ── AuditLog — prevent deletion ─────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION fn_prevent_audit_delete()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -224,7 +349,9 @@ CREATE TRIGGER trg_prevent_audit_log_delete
     BEFORE DELETE ON audit_log
     FOR EACH ROW EXECUTE FUNCTION fn_prevent_audit_delete();
 
--- ── Trigger: AuditLog — prevent core field updates ───────────────────────────
+-- ── AuditLog — prevent core field updates ───────────────────────────────────
+-- resolved / resolved_at / resolved_by are intentionally excluded so
+-- the review-queue resolve endpoint can mark items as resolved.
 CREATE OR REPLACE FUNCTION fn_prevent_audit_core_update()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -246,7 +373,7 @@ CREATE TRIGGER trg_prevent_audit_log_core_update
     BEFORE UPDATE ON audit_log
     FOR EACH ROW EXECUTE FUNCTION fn_prevent_audit_core_update();
 
--- ── Trigger: PromptVersion — prevent deletion ─────────────────────────────────
+-- ── PromptVersion — prevent deletion ─────────────────────────────────────────
 CREATE OR REPLACE FUNCTION fn_prevent_pv_delete()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -258,7 +385,11 @@ CREATE TRIGGER trg_prevent_prompt_version_delete
     BEFORE DELETE ON prompt_versions
     FOR EACH ROW EXECUTE FUNCTION fn_prevent_pv_delete();
 
--- ── Trigger: PromptVersion — prevent immutable content field updates ──────────
+-- ── PromptVersion — prevent immutable content field updates ──────────────────
+-- Operational fields (cache_valid, compliance_check_id, is_active,
+-- approved_by, approved_at, defects_found, corrections_made,
+-- regulatory_scores, injection_scan_result, upgrade_proposal_id)
+-- are intentionally excluded from this guard.
 CREATE OR REPLACE FUNCTION fn_prevent_pv_content_update()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -279,7 +410,7 @@ CREATE TRIGGER trg_prevent_prompt_version_content_update
     BEFORE UPDATE ON prompt_versions
     FOR EACH ROW EXECUTE FUNCTION fn_prevent_pv_content_update();
 
--- ── Trigger: ScoringDimension update — invalidate compliance cache ────────────
+-- ── ScoringDimension update — invalidate compliance cache ────────────────────
 CREATE OR REPLACE FUNCTION fn_invalidate_cache_on_dimension_update()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
