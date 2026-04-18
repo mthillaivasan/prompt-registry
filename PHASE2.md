@@ -143,3 +143,31 @@ Observation from smoke-testing on 18 April: the generated prompt contains govern
 Estimate: 3-4 hours for the schema change + classification + generator update; another 4-6 hours for wrapper UI and registry policy enforcement machinery. Do in two phases.
 
 **Priority:** high. This is the architecturally correct fix for the generator quality problem. The Brief Builder flow redesign (captured separately) addresses UX; this addresses data model. Both needed. This one is probably more important because it fixes output quality even if the flow stays as is.
+
+## Example-based brief coaching and generator benchmarking
+
+Observation from tonight: the Brief Builder coaching and the generator quality problem could both be addressed by a library of gold-standard example prompts drawn from public sources and the registry itself.
+
+Two use cases:
+
+1. Brief Builder coaching — when user starts a brief in a domain, surface 2-3 examples of how similar gold-standard briefs are worded. Placeholder-as-coaching plus example-as-coaching together.
+
+2. Generator benchmarking — compare generated prompt against similar gold-standard prompts. Flag divergence as a quality signal. Replaces much of what the 17-dimension compliance rubric was trying to do.
+
+Sources for the example library:
+- Public prompt libraries (Anthropic cookbook, OpenAI examples, LangChain hub, PromptBase) — general patterns
+- Regulatory publications (FINMA, FCA, BaFin, EU AI Act guidance) — regulated-finance-specific, authoritative
+- The organisation's own registry as it grows — domain-specific, proven
+
+Stacking model: seed with public + regulatory on day one, registry prompts augment over time, mature state is registry-dominated with public as fallback for novel categories.
+
+Replaces or reframes:
+- P3 three-tier coaching as originally specified (examples do the coaching, not LLM judgement)
+- "Quality threshold" problem in Brief Builder redesign (similarity to gold-standard briefs = threshold)
+- Parts of the 17-dimension compliance rubric (benchmark against proven-good prompts, not abstract criteria)
+
+Scope: seeded example library (~30 examples to start, curated by hand), semantic similarity search (embeddings, stored in Postgres pgvector or similar), comparison UI for Brief Builder, benchmarking logic in generator. Estimate: 6-10 hours for first cut, more for polished.
+
+Priority: after Brief Builder flow redesign ships. Complementary feature, not competing priority.
+
+Open question: who owns curating the seeded example library? Charlie Hainsworth at EY is a plausible collaborator given his Tax Technology and Transformation remit. Regulatory example harvesting is half-day of research.
