@@ -79,3 +79,31 @@ Observation from smoke-testing on 18 April: the Brief Builder asks for free-text
 This changes P3 (three-tier coaching) materially — polishing coaching on a wrongly-ordered flow is the wrong priority. Reconsider P3 after flow redesign.
 
 Estimate: flow redesign is 4-6 hours frontend + 1-2 hours backend. Significantly higher than P3 as originally scoped.
+
+---
+
+## Learning layer from completed prompts
+
+Once the registry contains N (TBD, suggest 10+) active prompts with compliance scores, the Brief Builder should use them as guidance when building new briefs in similar domains.
+
+**Mechanism:** when a user starts a new brief, match against existing Active prompts by `prompt_type`, `input_type`, `output_type`, and semantic similarity of purpose. Surface the top 2-3 matches during Brief Builder as "users building similar prompts made these choices." Optionally pre-fill structured fields from the closest match.
+
+**Effect:** coaching gets smarter as the registry grows. Eliminates much of the need for generic Tier 3 questioning for mature prompt domains.
+
+**Scope:** semantic similarity scoring (embeddings), UI for displaying similar-prompt guidance, data flow from registry into Brief Builder. Estimate: 4-6 hours first cut.
+
+**Dependency:** reconsider alongside Brief Builder flow redesign in the same section. May replace P3 coaching entirely.
+
+---
+
+## Page references as default component
+
+Any prompt whose `input_type` is a document (prospectus, policy, circular, report) should by default include an output instruction requiring page references or section citations for extracted content. Example: "Cite the source page or section for each data point extracted."
+
+This is load-bearing for regulated-finance use: an auditor needs to verify outputs against source material, and that only works if the AI reports where in the document each finding came from.
+
+**Implementation:** add a new component to `prompt_components` table — code `OUTPUT_PAGE_CITATIONS`, category `OutputFormat`. Mark it as auto-selected when `input_type` matches document-like values. Update the generator's `assemble_template` to include it by default for document inputs.
+
+**Scope:** one new component seed, one rule in `assemble_template`, possibly a schema addition for auto-select metadata on components. Estimate: 1-2 hours.
+
+**Priority:** high. This should probably happen before the EY Summit rather than after, because "AI output with citations" is exactly the credibility feature an EY partner would look for.
