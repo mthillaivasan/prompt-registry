@@ -42,15 +42,11 @@ async def lifespan(app: FastAPI):
         print("WARNING: JWT_SECRET_KEY not set — using fallback (not safe for production)")
         os.environ["JWT_SECRET_KEY"] = "INSECURE-FALLBACK-CHANGE-ME"
 
-    try:
-        Base.metadata.create_all(bind=engine)
-        run_migrations(engine)
-        create_triggers_and_indexes(engine)
-        run_seed()
-        print("Startup initialization complete")
-    except Exception as e:
-        print(f"WARNING: Startup initialization failed: {e}")
-        print("App will start but may have limited functionality")
+    Base.metadata.create_all(bind=engine)
+    run_migrations(engine)
+    create_triggers_and_indexes(engine)
+    run_seed()
+    print("Startup initialization complete")
 
     yield
 
