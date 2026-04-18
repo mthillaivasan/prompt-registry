@@ -53,3 +53,29 @@ The build spec references model `claude-sonnet-4-20250514`. If this identifier i
 ## Pass 2 notes
 
 - `check_tier2_trigger` and `resolve_guardrails` were promoted from module-private helpers (underscore prefix) in `prompts.py` and `compliance.py` to public functions in `services/guardrails.py` (no underscore), following Python convention for exportable service-module functions. Importers now use the underscore-free names. This was a deliberate convention change, not a gratuitous rename — the underscore prefix would have been a PEP 8 anti-pattern once the functions became cross-module imports.
+
+---
+
+## Brief Builder flow redesign
+
+Observation from smoke-testing on 18 April: the Brief Builder asks for free-text description first, then structured fields (input type, output type, audience, deployment target) later. This is backward.
+
+**Implications:**
+
+1. Validation questions on the initial description are premature — they ask the user to solve specificity that the next steps are designed to address.
+2. Users describe without scaffolding, which encourages vague language.
+3. The generator receives a brief where structured fields and free-text description are misaligned, because they were gathered out of sequence.
+4. The generator's output quality suffers — a brief about "determine from fund prospectus whether [X]" produced a generic AI-governance-assessment prompt because the template selection overrode the semantic content.
+
+**Proposed redesign:**
+
+1. Structured fields first (dropdowns, fast)
+2. Purpose free-text (now framed by choices already made)
+3. Validation AFTER purpose (now meaningful)
+4. Guardrail selection (auto-suggested from structured + purpose)
+5. Review and restructure
+6. Generate
+
+This changes P3 (three-tier coaching) materially — polishing coaching on a wrongly-ordered flow is the wrong priority. Reconsider P3 after flow redesign.
+
+Estimate: flow redesign is 4-6 hours frontend + 1-2 hours backend. Significantly higher than P3 as originally scoped.
