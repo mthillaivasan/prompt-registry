@@ -117,3 +117,29 @@ This is load-bearing for regulated-finance use: an auditor needs to verify outpu
 **Scope:** one new component seed, one rule in `assemble_template`, possibly a schema addition for auto-select metadata on components. Estimate: 1-2 hours.
 
 **Priority:** high. This should probably happen before the EY Summit rather than after, because "AI output with citations" is exactly the credibility feature an EY partner would look for.
+
+---
+
+## Three-category architecture for governance content
+
+Observation from smoke-testing on 18 April: the generated prompt contains governance content that the LLM cannot meaningfully act on (decommission triggers, reviewer assignments, accountability chains, "AI-generated on [date]" statements). This content is wrapper metadata *about* the prompt, not runtime instructions *to* the LLM. Including it in the system prompt either clutters every output with boilerplate or gets ignored, both of which degrade quality.
+
+**Current model:** every active scoring dimension generates a text block, all blocks concatenated into the system prompt as "TONE AND BEHAVIOUR RULES."
+
+**Correct model:** each dimension produces content of one of three types:
+
+1. **prompt_content** — runtime instructions for the LLM (e.g. OWASP_LLM09 "don't fabricate references," REG_D2 "cite page numbers," ISO42001_8_4 "declare uncertainty"). Goes into the prompt.
+2. **wrapper_metadata** — information displayed around the LLM output, not given to the LLM (e.g. NIST_GOVERN_1 "System Owner," "Accountable reviewer," audit trail references, AI-generation disclosure with date and version). Rendered by the registry UI around the output, not fed to the LLM.
+3. **registry_policy** — rules the registry machinery enforces against the prompt lifecycle, not runtime content (e.g. NIST_MANAGE_1 "decommission trigger 85% accuracy" is a monitoring rule, not a prompt instruction). Implemented in registry code, not in prompt text.
+
+### Scope of change
+
+- Add `content_type` column to `scoring_dimensions` table with enum `{prompt_content, wrapper_metadata, registry_policy}`
+- Classify all 17 existing dimensions into the three types (manual review, ~30 minutes)
+- Update `assemble_template` to only include `prompt_content` dimensions in the generated prompt
+- Build UI components to render `wrapper_metadata` around displayed output
+- Design `registry_policy` enforcement mechanism (monitoring dashboard, accuracy tracking, automated review triggers)
+
+Estimate: 3-4 hours for the schema change + classification + generator update; another 4-6 hours for wrapper UI and registry policy enforcement machinery. Do in two phases.
+
+**Priority:** high. This is the architecturally correct fix for the generator quality problem. The Brief Builder flow redesign (captured separately) addresses UX; this addresses data model. Both needed. This one is probably more important because it fixes output quality even if the flow stays as is.
