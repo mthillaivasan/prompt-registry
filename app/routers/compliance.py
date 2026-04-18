@@ -17,6 +17,7 @@ from app.schemas import (
     GoldStandardOut,
 )
 from services import compliance_engine
+from services.guardrails import check_tier2_trigger
 
 router = APIRouter(tags=["compliance"])
 
@@ -149,41 +150,6 @@ def list_dimensions(
     ]
 
 
-def _check_tier2_trigger(dim, deployment_target: str, input_type: str, risk_tier: str, prompt_text: str) -> str | None:
-    """Evaluate whether a tier-2 dimension's condition is met. Returns reason or None."""
-    code = dim.code
-    dt = (deployment_target or "").lower()
-    it = (input_type or "").lower()
-    rt = (risk_tier or "").lower()
-    pt = (prompt_text or "").lower()
-
-    if code == "REG_D2":
-        if "agent" in dt or "external" in dt or "copilot" in dt:
-            return "Deployment target involves agents or external visibility"
-        return None
-    if code == "REG_D3":
-        if "personal" in it or "personal" in pt or "client data" in pt:
-            return "Personal or client data referenced"
-        return None
-    if code == "REG_D5":
-        if rt == "high" or "critical" in pt:
-            return "High risk tier or critical process mentioned"
-        return None
-    if code == "REG_D6":
-        if dt and "internal" not in dt and "claude" not in dt:
-            return "Deployment target is not Internal or Claude"
-        return None
-    if code == "OWASP_LLM01":
-        if "free text" in it or "form" in it or "user" in it:
-            return "Input includes user-supplied or free-text content"
-        return None
-    if code == "OWASP_LLM06":
-        if "agent" in dt or "automation" in dt:
-            return "Deployment target involves agents or automation"
-        return None
-    return None
-
-
 @router.get("/scoring-dimensions/applicable")
 def get_applicable_dimensions(
     prompt_type: str = "",
@@ -214,7 +180,7 @@ def get_applicable_dimensions(
         if dim_tier == 1:
             tier1.append(entry)
         elif dim_tier == 2:
-            reason = _check_tier2_trigger(d, deployment_target, input_type, risk_tier, prompt_text_snippet)
+            reason = check_tier2_trigger(d, deployment_target, input_type, risk_tier, prompt_text_snippet)
             entry["triggered"] = reason is not None
             entry["trigger_reason"] = reason or getattr(d, 'tier2_trigger', None) or ""
             tier2.append(entry)
