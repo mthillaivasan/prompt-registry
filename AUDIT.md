@@ -479,3 +479,13 @@ However, with 4 days to demo, a full rebuild (option c) is not justified. The mo
 
 **Total post-refactor work: ~4.5 hours**
 **Grand total: ~9 hours of focused work before feature development.**
+
+---
+
+## Pass 1 oversights surfaced in production
+
+1. **main.py lifespan try/except was swallowing migration failures** despite Pass 1 Task 2 making migrations.py loud. The error swallowing was one level up from where Pass 1 looked. Fixed in commit d7866cb (main.py: let startup failures crash instead of swallow).
+
+2. **app/models.py AuditLog.timestamp used SQLite-specific strftime** as server_default, blocking Postgres create_all with "function strftime(unknown, unknown) does not exist". The audit flagged this in section 2 as MEDIUM severity, which was calibrated against demo risk, not production reliability. For a tool intended to run on Postgres in production, any finding flagged "will fail on Postgres" should be re-ranked HIGH.
+
+3. **Lesson for Pass 2 scoping**: the audit's severity rankings were correct for their original framing (demo Tuesday) but need recalibration now that the goal is "tool that works properly long-term." Before starting Pass 2, re-read audit sections 2 and 5 and reclassify anything that will fail on Postgres as HIGH, not MEDIUM.
