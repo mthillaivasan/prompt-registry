@@ -1,22 +1,26 @@
 """
 Ensure all tables and columns exist in the connected database.
 Runs on startup after Base.metadata.create_all().
-Uses IF NOT EXISTS for safety — idempotent.
+
+Fails fast on error — if a migration step fails, the app should not
+start with a silently broken schema. The caller (main.py lifespan)
+is responsible for deciding whether to abort or continue.
 """
 
 from sqlalchemy import text
 
 
 def run_migrations(engine) -> None:
-    """Add any columns/tables that may be missing in an existing Postgres database."""
+    """Add any columns/tables that may be missing in an existing database.
+
+    Raises on failure so the caller knows exactly which step broke.
+    """
     is_sqlite = "sqlite" in str(engine.url)
 
     with engine.connect() as conn:
-        # scoring_dimensions.tier and tier2_trigger
-        _add_column(conn, "scoring_dimensions", "tier", "INTEGER DEFAULT 3", is_sqlite)
+        _add_column(conn, "scoring_dimensions", "tier", "INTEGER NOT NULL DEFAULT 3", is_sqlite)
         _add_column(conn, "scoring_dimensions", "tier2_trigger", "TEXT", is_sqlite)
 
-        # briefs table
         _create_table_if_not_exists(conn, "briefs", """
             brief_id VARCHAR(36) PRIMARY KEY,
             status VARCHAR NOT NULL DEFAULT 'In Progress',
@@ -36,7 +40,6 @@ def run_migrations(engine) -> None:
             resulting_prompt_id VARCHAR(36)
         """, is_sqlite)
 
-        # prompt_components table
         _create_table_if_not_exists(conn, "prompt_components", """
             component_id VARCHAR(36) PRIMARY KEY,
             code VARCHAR UNIQUE NOT NULL,
@@ -50,7 +53,6 @@ def run_migrations(engine) -> None:
             sort_order INTEGER NOT NULL DEFAULT 0
         """, is_sqlite)
 
-        # prompt_templates table
         _create_table_if_not_exists(conn, "prompt_templates", """
             template_id VARCHAR(36) PRIMARY KEY,
             code VARCHAR UNIQUE NOT NULL,
@@ -70,7 +72,6 @@ def run_migrations(engine) -> None:
             sort_order INTEGER NOT NULL DEFAULT 0
         """, is_sqlite)
 
-        # prompt_versions.upgrade_proposal_id (may be missing)
         _add_column(conn, "prompt_versions", "upgrade_proposal_id", "VARCHAR(36)", is_sqlite)
 
         conn.commit()
@@ -78,17 +79,25 @@ def run_migrations(engine) -> None:
 
 
 def _add_column(conn, table: str, column: str, col_type: str, is_sqlite: bool) -> None:
-    try:
-        if is_sqlite:
-            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
-        else:
-            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}"))
-    except Exception:
-        pass  # Column already exists
+    """Add a column if it does not already exist.
+
+    On Postgres, IF NOT EXISTS handles idempotency natively.
+    On SQLite, IF NOT EXISTS is not supported for ALTER TABLE, so we
+    check the pragma first and skip if the column is already present.
+    """
+    if is_sqlite:
+        rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+        existing = {row[1] for row in rows}
+        if column in existing:
+            return
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+        print(f"  Added column {table}.{column}")
+    else:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}"))
+        print(f"  Ensured column {table}.{column}")
 
 
 def _create_table_if_not_exists(conn, table: str, columns: str, is_sqlite: bool) -> None:
-    try:
-        conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table} ({columns})"))
-    except Exception as e:
-        print(f"Warning: Could not create table {table}: {e}")
+    """Create a table if it does not already exist. Raises on failure."""
+    conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table} ({columns})"))
+    print(f"  Ensured table {table}")

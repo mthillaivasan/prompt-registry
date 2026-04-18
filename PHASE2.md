@@ -33,3 +33,9 @@ Trend charts, score distributions, defect rates, and compliance dashboards. Not 
 
 ## P2-010 — Model Alias Note
 The build spec references model `claude-sonnet-4-20250514`. If this identifier is not accepted by the Anthropic API at runtime, fall back to `claude-sonnet-4-6` and investigate whether the two identifiers resolve to the same model. Confirm the correct production alias before Phase 2 release.
+
+---
+
+## Deferred from Pass 1
+
+- **Timestamp columns stored as TEXT instead of TIMESTAMPTZ.** All timestamp columns in the SQLAlchemy models use `Column(String)` and store ISO 8601 strings (e.g. `"2026-04-18T10:30:00Z"`). The authoritative SQL (`001_initial.sql`) was updated to match this, using `TEXT` columns rather than `TIMESTAMPTZ`. This should be fixed by changing SQLAlchemy models to `Column(DateTime(timezone=True))` and updating all timestamp writers. Scope: `models.py`, all routers/services that write timestamps, all `_utcnow()` helpers. Estimate: 2-3 hours.
