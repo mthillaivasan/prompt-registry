@@ -58,7 +58,11 @@ def create_prompt(
     prompt = Prompt(
         title=body.title,
         prompt_type=body.prompt_type,
+        # Transitional dual-write: deployment_target deprecated; new callers
+        # set ai_platform + output_destination instead. See schemas.py.
         deployment_target=body.deployment_target,
+        ai_platform=body.ai_platform,
+        output_destination=body.output_destination,
         input_type=body.input_type,
         output_type=body.output_type,
         risk_tier=body.risk_tier,

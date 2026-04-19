@@ -125,6 +125,11 @@ class Prompt(Base):
     title = Column(String, nullable=False)
     prompt_type = Column(String, nullable=False)
     deployment_target = Column(String, nullable=False)
+    # Transitional: deployment_target is deprecated in favour of
+    # ai_platform + output_destination. Dual-write keeps the legacy
+    # NOT-NULL column valid until it is dropped in a future migration.
+    ai_platform = Column(String, nullable=True)
+    output_destination = Column(String, nullable=True)
     input_type = Column(String, nullable=False)
     output_type = Column(String, nullable=False)
     risk_tier = Column(String, nullable=False)

@@ -89,6 +89,8 @@ CREATE TABLE prompts (
     title                TEXT NOT NULL,
     prompt_type          TEXT NOT NULL,
     deployment_target    TEXT NOT NULL,
+    ai_platform          TEXT,
+    output_destination   TEXT,
     input_type           TEXT NOT NULL,
     output_type          TEXT NOT NULL,
     risk_tier            TEXT NOT NULL,

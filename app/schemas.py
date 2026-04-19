@@ -25,6 +25,8 @@ PromptStatus = Literal[
     "Retired",
 ]
 
+TopicState = Literal["red", "amber", "green"]
+
 
 # ── Prompt schemas ───────────────────────────────────────────────────────────
 
@@ -39,6 +41,11 @@ class PromptCreate(BaseModel):
     # Initial v1 content
     prompt_text: str = Field(min_length=1)
     change_summary: str | None = None
+    # Transitional: deployment_target is deprecated in favour of
+    # ai_platform + output_destination. Dual-write keeps the legacy
+    # NOT-NULL column valid until it is dropped in a future migration.
+    ai_platform: str = "Claude"
+    output_destination: str | None = None
 
 
 class PromptUpdate(BaseModel):
@@ -107,6 +114,9 @@ class GenerateRequest(BaseModel):
     brief_text: str = ""
     constraints: list[str] = []
     selected_guardrails: list[str] | None = None  # dimension codes; None = auto-detect
+    # Transitional: see PromptCreate above.
+    ai_platform: str = "Claude"
+    output_destination: str | None = None
 
 
 class GenerateResponse(BaseModel):
@@ -117,11 +127,43 @@ class ConversationEntry(BaseModel):
     question: str = ""
     answer: str = ""
     skipped: bool = False
+    topic_id: str | None = None
 
 
 class ValidateBriefRequest(BaseModel):
     description: str = Field(min_length=1)
     conversation_history: list[ConversationEntry] = []
+
+
+class BriefTopicEntry(BaseModel):
+    """Per-topic answer within Brief.step_answers (Phase A model).
+
+    When the Phase B UI lands, writers of step_answers will use this
+    shape: {topic_id: BriefTopicEntry.model_dump()}. Phase A does not
+    yet have any UI writers; the model exists so API callers can
+    round-trip the shape via the existing /briefs/{id} PATCH.
+    """
+    value: str
+    state: TopicState
+    updated_at: str
+    conversation_history: list[ConversationEntry] = []
+
+
+class ValidateTopicRequest(BaseModel):
+    topic_id: str = Field(min_length=1)
+    prompt_type: PromptType
+    topic_answer: str = ""
+    sibling_answers: dict[str, str] = {}
+    conversation_history: list[ConversationEntry] = []
+
+
+class ValidateTopicResponse(BaseModel):
+    state: TopicState
+    suggestion: str | None = None
+    suggested_addition: str | None = None
+    question: str | None = None
+    options: list[str] | None = None
+    free_text_placeholder: str | None = None
 
 
 class ValidateBriefResponse(BaseModel):
