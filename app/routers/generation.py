@@ -23,8 +23,16 @@ from app.schemas import (
     RestructureBriefResponse,
     ValidateBriefRequest,
     ValidateBriefResponse,
+    ValidateTopicRequest,
+    ValidateTopicResponse,
 )
 from services.guardrails import resolve_guardrails
+from services.topic_rubrics import (
+    UnknownTopicError,
+    build_validate_topic_system_prompt,
+    get_rubric,
+    has_rubric_set,
+)
 from services.variable_resolver import VariableResolver
 
 router = APIRouter(prefix="/prompts", tags=["generation"])
@@ -345,6 +353,100 @@ def restructure_brief(
         title = None
 
     return RestructureBriefResponse(restructured=restructured, title=title)
+
+
+# ── Per-topic validation for the Step 1 topic checklist ──────────────────────
+
+# Model choice: Haiku. Pre-build test showed 92% state-agreement with Sonnet
+# and zero red↔green disagreements on 12 paired calls. Sonnet stays for the
+# whole-brief restructure call above (quality matters more there, runs once).
+# See docs/HAIKU_VS_SONNET_RESULTS.md.
+_VALIDATE_TOPIC_MODEL = "claude-haiku-4-5-20251001"
+
+
+@router.post("/briefs/validate-topic", response_model=ValidateTopicResponse)
+def validate_topic(
+    body: ValidateTopicRequest,
+    current_user: User = Depends(get_current_user),
+):
+    if not has_rubric_set(body.prompt_type):
+        raise HTTPException(
+            status_code=501,
+            detail=f"Topic list not yet available for prompt_type {body.prompt_type!r}",
+        )
+    try:
+        get_rubric(body.prompt_type, body.topic_id)
+    except UnknownTopicError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown topic_id {body.topic_id!r} for prompt_type {body.prompt_type!r}",
+        )
+
+    # Filter conversation_history to the focal topic only. Excludes skipped
+    # entries, empty questions, and the validation/track workflow markers.
+    relevant = [
+        e for e in body.conversation_history
+        if e.topic_id == body.topic_id
+        and not e.skipped
+        and e.question
+        and e.question not in ("validation", "track")
+    ]
+    answer_block = body.topic_answer or "(no answer yet)"
+    if body.sibling_answers:
+        sibling_block = "\n".join(f"- {k}: {v}" for k, v in body.sibling_answers.items())
+    else:
+        sibling_block = "None."
+    if relevant:
+        history_block = "\n\n".join(f"Q: {e.question}\nA: {e.answer}" for e in relevant)
+    else:
+        history_block = "None."
+    user_message = (
+        f"FOCAL TOPIC ANSWER:\n{answer_block}\n\n"
+        f"SIBLING ANSWERS FOR CONTEXT ONLY:\n{sibling_block}\n\n"
+        f"PRIOR COACHING ON THIS TOPIC:\n{history_block}"
+    )
+    system_prompt = build_validate_topic_system_prompt(body.prompt_type, body.topic_id)
+
+    try:
+        client = anthropic.Anthropic()
+        print(f"[ValidateTopic] topic={body.topic_id} prior_Qs={len(relevant)} answer_len={len(body.topic_answer)}")
+        response = client.messages.create(
+            model=_VALIDATE_TOPIC_MODEL,
+            max_tokens=384,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        raw = response.content[0].text.strip()
+        if raw.startswith("```"):
+            lines = raw.split("\n")
+            raw = "\n".join(lines[1:-1])
+    except Exception as e:
+        print(f"WARNING: Topic validation failed: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Topic validation unavailable: {e}",
+        )
+
+    try:
+        parsed = json.loads(raw)
+        state = parsed.get("state")
+        if state not in ("red", "amber", "green"):
+            raise ValueError(f"invalid state in response: {state!r}")
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"WARNING: Topic validation response malformed: {e}; raw={raw[:200]}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Topic validation unavailable: response parse error",
+        )
+
+    return ValidateTopicResponse(
+        state=state,
+        suggestion=parsed.get("suggestion"),
+        suggested_addition=parsed.get("suggested_addition"),
+        question=parsed.get("question"),
+        options=parsed.get("options"),
+        free_text_placeholder=parsed.get("free_text_placeholder"),
+    )
 
 
 # ── Generate prompt text via Claude ──────────────────────────────────────────
