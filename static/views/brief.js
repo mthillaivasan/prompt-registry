@@ -1,7 +1,7 @@
 // Brief Builder — 6-step guided form + review, purely frontend state
 (function () {
-  const TOTAL_STEPS = 6;
-  const STEP_NAMES = ['Purpose', 'Input type', 'Output type', 'Audience', 'Constraints', 'Guardrails'];
+  const TOTAL_STEPS = 5;
+  const STEP_NAMES = ['Metadata', 'Brief', 'Audience', 'Constraints', 'Guardrails'];
   let step = 1;
   let validationError = '';
   let validationResult = null;
@@ -23,6 +23,47 @@
   const INPUT_OPTIONS = ['Form responses', 'Document or report', 'Data table', 'Email thread', 'Free text', 'Structured data', 'Meeting notes', 'Other'];
   const OUTPUT_OPTIONS = ['Structured assessment', 'Executive summary', 'Briefing note', 'Recommendation', 'Flag report', 'Draft email or communication', 'Data extraction', 'Comparison table', 'Other'];
   const AUDIENCE_OPTIONS = ['Senior committee', 'Operations team', 'Executive', 'Compliance team', 'External counterparty', 'Project sponsor', 'Broad internal audience'];
+
+  // B1: structured Extraction topic pickers on Step 1. Mirrors services/topic_rubrics.py
+  // EXTRACTION_RUBRICS (options only). Non-Extraction prompt types render a
+  // "not yet available" placeholder for topics 2-5+4b — design §B1 / §B6 #5.
+  const PROMPT_TYPES = ['Extraction', 'Classification', 'Summarisation', 'Comparison', 'Analysis', 'Comms', 'Governance', 'Risk Review'];
+  const EXTRACTION_TOPICS = [
+    { id: 'topic_1_prompt_type',  name: 'Prompt Type',                                       required: true,  options: PROMPT_TYPES },
+    { id: 'topic_2_source_doc',   name: 'Source document type',                              required: false, options: ['Prospectus', 'Policy', 'Circular', 'Regulatory filing', 'Report', 'Contract', 'Email thread', 'Form responses', 'Data table', 'Free text', 'Other'] },
+    { id: 'topic_3_output_format',name: 'Output format',                                     required: false, options: ['JSON object', 'Table/CSV', 'Markdown extraction report', 'Flag report', 'Data extraction payload', 'Other'] },
+    { id: 'topic_4_target_system',name: 'Target system (where the output goes)',             required: false, options: ['Simcorp', 'Temenos', 'Charles River', 'Bloomberg AIM', 'Murex', 'Internal spreadsheet', 'Downstream AI or pipeline', 'Advisory only — no system', 'Other'] },
+    { id: 'topic_4b_ai_platform', name: 'AI platform (what runs the prompt)',                required: false, options: ['Claude', 'MS Copilot — Declarative', 'MS Copilot — Custom Engine', 'OpenAI', 'Multi-model', 'Other'] },
+    { id: 'topic_5_risk_tier',    name: 'Risk tier',                                         required: false, options: ['Minimal', 'Limited', 'High', 'Prohibited'] },
+  ];
+
+  // B1 transitional dual-write: picking a topic also sets the legacy state field
+  // so the generator handoff (which currently reads state.inputType / state.outputType)
+  // keeps working. Remove in B3 once topic→generator piping lands cleanly.
+  const TOPIC_2_TO_INPUT_TYPE = {
+    'Prospectus': 'Document or report',
+    'Policy': 'Document or report',
+    'Circular': 'Document or report',
+    'Regulatory filing': 'Document or report',
+    'Report': 'Document or report',
+    'Contract': 'Document or report',
+    'Email thread': 'Email thread',
+    'Form responses': 'Form responses',
+    'Data table': 'Data table',
+    'Free text': 'Free text',
+    'Other': '',
+  };
+  const TOPIC_3_TO_OUTPUT_TYPE = {
+    'JSON object': 'Data extraction',
+    'Table/CSV': 'Data extraction',
+    'Markdown extraction report': 'Data extraction',
+    'Flag report': 'Flag report',
+    'Data extraction payload': 'Data extraction',
+    'Other': '',
+  };
+
+  let topicState = {}; // { topic_id: { value, state: 'red'|'amber'|'green', updated_at } }
+  let expandedTopic = null; // id of the currently-expanded topic, or null
   const CONSTRAINT_OPTIONS = [
     'Must not admit liability',
     'Must flag uncertainty rather than guess',
@@ -40,6 +81,7 @@
     state.clientName = ''; state.ownerName = ''; state.ownerRole = ''; state.skipped = [];
     validationResult = null; tier3Count = 0; tier3Selected.clear(); briefScore = null; restructuredBrief = null; restructuredTitle = null; useRestructured = true;
     validating = false; validationSeq = 0;
+    topicState = {}; expandedTopic = null;
     window._briefConversation = []; window._briefQuestionCount = {};
     guardrailData = null; briefId = null;
 
@@ -87,6 +129,19 @@
           state.audience = answers.audience || '';
           state.constraints = answers.constraints || [];
           state.skipped = answers.skipped || [];
+          // B1: hydrate per-topic entries (Phase A schema — see docs/CHECKLIST_DESIGN.md §B4).
+          for (const key in answers) {
+            if (key.startsWith('topic_')) topicState[key] = answers[key];
+          }
+          // Transitional: if a prior topic pick exists but state.inputType / state.outputType
+          // are empty (e.g. brief was picked via Step 1 but the generator was never reached),
+          // derive them now so Steps 3+ and the generator handoff still see the right values.
+          if (topicState.topic_2_source_doc && !state.inputType) {
+            state.inputType = TOPIC_2_TO_INPUT_TYPE[topicState.topic_2_source_doc.value] || '';
+          }
+          if (topicState.topic_3_output_format && !state.outputType) {
+            state.outputType = TOPIC_3_TO_OUTPUT_TYPE[topicState.topic_3_output_format.value] || '';
+          }
           state.selectedGuardrails = JSON.parse(b.selected_guardrails || '[]');
           localStorage.setItem('pr_active_brief', briefId);
           if (params && params.jumpTo) step = params.jumpTo;
@@ -120,18 +175,16 @@
   };
 
   function isStepValid() {
-    if (step === 1) return state.purpose.length >= 20;
-    if (step === 2) return !!state.inputType;
-    if (step === 3) return !!state.outputType;
-    if (step === 4) return !!state.audience;
-    return true; // steps 5, 6 always valid
+    if (step === 1) return !!(topicState.topic_1_prompt_type && topicState.topic_1_prompt_type.state === 'green');
+    if (step === 2) return state.purpose.length >= 20;
+    if (step === 3) return !!state.audience;
+    return true; // steps 4, 5 always valid
   }
 
   function getValidationHint() {
-    if (step === 1) return 'Please describe what this prompt needs to do in at least 20 characters';
-    if (step === 2) return 'Please select an input type';
-    if (step === 3) return 'Please select an output type';
-    if (step === 4) return 'Please select an audience';
+    if (step === 1) return 'Please pick a Prompt Type';
+    if (step === 2) return 'Please describe the task in at least 20 characters';
+    if (step === 3) return 'Please select an audience';
     return '';
   }
 
@@ -175,18 +228,64 @@
     </div>` + progress + '<div class="card">';
 
     if (step === 1) {
+      // Step 1 — structured metadata picks. Six quick picks. Prompt Type is the gate;
+      // others optional. See docs/CHECKLIST_DESIGN.md §B1/B2.
+      html += `<h3 style="margin-bottom:8px">Describe this prompt at a glance</h3>
+        <p style="color:var(--text2);margin-bottom:16px;font-size:14px">Pick the structured metadata. Only Prompt Type is required; other picks are quick and help the generator produce a better prompt.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="form-group"><label>Client</label><input type="text" id="brief-client" value="${esc(state.clientName)}" placeholder="e.g. Lombard Odier" onchange="window._briefMeta('clientName',this.value)"></div>
+          <div class="form-group"><label>Business owner</label><input type="text" id="brief-owner" value="${esc(state.ownerName)}" placeholder="e.g. Sarah Chen" onchange="window._briefMeta('ownerName',this.value)"></div>
+          <div class="form-group"><label>Role</label><input type="text" id="brief-role" value="${esc(state.ownerRole)}" placeholder="e.g. Head of Settlement" onchange="window._briefMeta('ownerRole',this.value)"></div>
+        </div>
+        <p style="color:var(--text2);margin-bottom:20px;font-size:12px">Client/owner/role records who the requirement came from, for the audit trail.</p>`;
+
+      const pickedType = topicState.topic_1_prompt_type && topicState.topic_1_prompt_type.value;
+      const isExtraction = pickedType === 'Extraction' || !pickedType;
+      EXTRACTION_TOPICS.forEach(topic => {
+        const entry = topicState[topic.id];
+        const picked = entry && entry.value;
+        // Only Extraction is wired in Phase A. For non-Extraction prompt types,
+        // collapse topics 2+ behind a placeholder.
+        const isTopic1 = topic.id === 'topic_1_prompt_type';
+        if (!isTopic1 && !isExtraction) {
+          html += `<div style="margin-bottom:14px;opacity:0.5">
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">${esc(topic.name)}</div>
+            <div style="font-size:12px;color:var(--text2)">Topic list not yet available for ${esc(pickedType)}. Only Extraction has a specced topic list in Phase A.</div>
+          </div>`;
+          return;
+        }
+        html += `<div style="margin-bottom:14px">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+            <span style="font-size:14px;font-weight:600">${esc(topic.name)}</span>`;
+        if (topic.required) {
+          html += `<span style="font-size:11px;color:var(--amber);font-family:var(--font-mono)">required</span>`;
+        }
+        if (picked) {
+          html += `<span style="font-size:11px;color:var(--green);font-family:var(--font-mono)">&#10003; ${esc(picked)}</span>`;
+        }
+        html += `</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">`;
+        topic.options.forEach(opt => {
+          const sel = picked === opt;
+          const cls = sel ? 'btn btn-gold btn-sm' : 'btn btn-outline btn-sm';
+          html += `<button class="${cls}" onclick="window._briefPickTopic('${esc(topic.id)}','${esc(opt)}')">${esc(opt)}</button>`;
+        });
+        html += `</div>
+        </div>`;
+      });
+
+      if (validationError && !isStepValid()) {
+        html += `<p style="color:var(--amber);font-size:13px;margin-top:12px">${getValidationHint()}</p>`;
+      }
+    } else if (step === 2) {
+      // Step 2 — prose brief, scoped. Prose topic coaching (Review button, Tier cards)
+      // is out of scope for B1 — lands in B2.
       const charCount = state.purpose.length;
       const isValid = charCount >= 20;
-      html += `<h3 style="margin-bottom:12px">What does this prompt need to do?</h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
-          <div class="form-group"><label>Client</label><input type="text" id="brief-client" value="${esc(state.clientName)}" placeholder="e.g. Lombard Odier" onchange="window._briefMeta('clientName',this.value)"><a style="font-size:11px;color:var(--text2);cursor:pointer;margin-top:4px;display:block" onclick="document.getElementById('brief-client').value='';window._briefMeta('clientName','')">Skip for now</a></div>
-          <div class="form-group"><label>Business owner</label><input type="text" id="brief-owner" value="${esc(state.ownerName)}" placeholder="e.g. Sarah Chen" onchange="window._briefMeta('ownerName',this.value)"><a style="font-size:11px;color:var(--text2);cursor:pointer;margin-top:4px;display:block" onclick="document.getElementById('brief-owner').value='';window._briefMeta('ownerName','');document.getElementById('brief-role').focus()">Skip for now</a></div>
-          <div class="form-group"><label>Role</label><input type="text" id="brief-role" value="${esc(state.ownerRole)}" placeholder="e.g. Head of Settlement" onchange="window._briefMeta('ownerRole',this.value)"><a style="font-size:11px;color:var(--text2);cursor:pointer;margin-top:4px;display:block" onclick="document.getElementById('brief-role').value='';window._briefMeta('ownerRole','')">Skip for now</a></div>
-        </div>
-        <p style="color:var(--text2);margin-bottom:16px;font-size:12px">This records who the requirement came from for the audit trail.</p>
-        <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Describe in one or two sentences what you want the AI to do.</p>
+      html += `<h3 style="margin-bottom:8px">Describe the task</h3>
+        <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Describe the task: what data points to extract, per-field format, how to handle missing data, confidence requirements, error modes. Everything else is already captured above.</p>
         <div class="form-group">
-          <textarea id="brief-purpose" rows="4" oninput="window._briefPurposeInput(this.value)" placeholder="e.g. Summarise incoming customer complaints and flag any that mention regulatory obligations or potential liability.">${esc(state.purpose)}</textarea>
+          <textarea id="brief-purpose" rows="8" oninput="window._briefPurposeInput(this.value)" placeholder="e.g. Extract subscription cut-off time (HH:MM + time zone), ISIN, and minimum investment amount from the Share Class Details and Dealing Procedures sections of each prospectus. Output as JSON with page references. If a field is missing, return null with confidence: low. Handle partial documents by flagging the missing section but not blocking.">${esc(state.purpose)}</textarea>
           <div style="display:flex;justify-content:flex-end;margin-top:6px">
             <span class="mono" style="font-size:12px;color:${isValid ? 'var(--green)' : 'var(--text2)'}">${charCount}/20 ${isValid ? '&#10003;' : 'min'}</span>
           </div>
@@ -194,97 +293,7 @@
       if (validationError && !isValid) {
         html += `<p style="color:var(--amber);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
       }
-      // Review button — on-demand re-validate. Three states:
-      //  no result  + ≥200  → primary gold "Review brief"
-      //  no result  + <200  → primary, disabled
-      //  tier 2/3           → neutral outline "Re-review" (always enabled if ≥200)
-      //  tier 1             → disabled neutral "Brief passes"
-      {
-        const len = (state.purpose || '').length;
-        const canReview = len >= 200;
-        const tier = validationResult && validationResult.tier;
-        let reviewCls, reviewLabel, reviewDisabled;
-        if (tier === 1) {
-          reviewCls = 'btn btn-outline btn-sm';
-          reviewLabel = 'Brief passes';
-          reviewDisabled = true;
-        } else if (tier === 2 || tier === 3) {
-          reviewCls = 'btn btn-outline btn-sm';
-          reviewLabel = 'Re-review';
-          reviewDisabled = !canReview;
-        } else {
-          reviewCls = 'btn btn-gold btn-sm';
-          reviewLabel = 'Review brief';
-          reviewDisabled = !canReview;
-        }
-        const reviewDisabledStyle = reviewDisabled ? 'opacity:0.4;cursor:not-allowed;pointer-events:none' : 'opacity:1;cursor:pointer';
-        html += `<div style="margin-top:8px">
-          <button class="${reviewCls}" id="brief-review-btn" style="${reviewDisabledStyle}" onclick="window._briefRevalidate()">${reviewLabel}</button>
-        </div>`;
-      }
-      // Tier 1 — brief accepted, user may still keep editing or click Next stage
-      if (validationResult && validationResult.tier === 1) {
-        html += `<div style="background:var(--surface2);border-left:3px solid var(--green);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
-          <div style="font-size:13px;color:var(--green);margin-bottom:4px;font-weight:600">Brief looks good</div>
-          <p style="font-size:14px;color:var(--text);margin:0">Ready for Step 2. Click Next stage when you're ready, or keep editing if you have more to add.</p>
-        </div>`;
-      }
-      // Tier 2 — suggestion card (primary accepts + re-validates; secondary dismisses + re-validates)
-      if (validationResult && validationResult.tier === 2) {
-        html += `<div style="background:var(--surface2);border-left:3px solid var(--accent);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
-          <div style="font-size:13px;color:var(--accent);margin-bottom:6px;font-weight:600">One suggestion</div>
-          <p style="font-size:14px;color:var(--text);margin:0 0 10px">${esc(validationResult.suggestion || '')}</p>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-gold btn-sm" onclick="window._briefUseSuggestion()">Use this suggestion</button>
-            <button class="btn btn-outline btn-sm" onclick="window._briefDismissProbe()">Ignore this line of thought</button>
-          </div>
-        </div>`;
-      }
-      // Tier 3 — question card (primary submits + re-validates; secondary dismisses + re-validates)
-      if (validationResult && validationResult.tier === 3) {
-        html += `<div style="background:var(--surface2);border-left:3px solid var(--amber);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
-          <div style="font-size:15px;color:var(--text);margin-bottom:10px;font-family:var(--font-heading)">${esc(validationResult.question || 'Help me understand this better')}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">`;
-        (validationResult.options || []).forEach(opt => {
-          const sel = tier3Selected.has(opt);
-          const cls = sel ? 'btn btn-gold btn-sm' : 'btn btn-outline btn-sm';
-          html += `<button class="${cls}" onclick="window._briefToggleOption('${esc(opt)}')">${sel ? '&#10003; ' : ''}${esc(opt)}</button>`;
-        });
-        html += `</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px">
-            <input type="text" id="brief-tier3-free" style="flex:1" placeholder="${esc(validationResult.free_text_placeholder || 'Or type your answer...')}" onkeydown="if(event.key==='Enter'){event.preventDefault();window._briefSubmit();}">
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-gold btn-sm" onclick="window._briefSubmit()">Submit answer</button>
-            <button class="btn btn-outline btn-sm" onclick="window._briefDismissProbe()">Ignore this line of thought</button>
-          </div>
-        </div>`;
-      }
-    } else if (step === 2) {
-      html += `<h3 style="margin-bottom:12px">What goes in?</h3>
-        <p style="color:var(--text2);margin-bottom:12px;font-size:14px">What will the AI receive as input?</p>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">`;
-      INPUT_OPTIONS.forEach(opt => {
-        const sel = state.inputType === opt;
-        html += `<button class="btn ${sel ? 'btn-primary' : 'btn-outline'}" onclick="window._briefSelect('inputType','${esc(opt)}')">${esc(opt)}</button>`;
-      });
-      html += '</div>';
-      if (validationError && !state.inputType) {
-        html += `<p style="color:var(--red);font-size:13px;margin-top:12px">${getValidationHint()}</p>`;
-      }
     } else if (step === 3) {
-      html += `<h3 style="margin-bottom:12px">What comes out?</h3>
-        <p style="color:var(--text2);margin-bottom:12px;font-size:14px">What should the AI produce?</p>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">`;
-      OUTPUT_OPTIONS.forEach(opt => {
-        const sel = state.outputType === opt;
-        html += `<button class="btn ${sel ? 'btn-primary' : 'btn-outline'}" onclick="window._briefSelect('outputType','${esc(opt)}')">${esc(opt)}</button>`;
-      });
-      html += '</div>';
-      if (validationError && !state.outputType) {
-        html += `<p style="color:var(--red);font-size:13px;margin-top:12px">${getValidationHint()}</p>`;
-      }
-    } else if (step === 4) {
       html += `<h3 style="margin-bottom:12px">Who receives the output?</h3>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Who will read or use the AI output?</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px">`;
@@ -296,7 +305,7 @@
       if (validationError && !state.audience) {
         html += `<p style="color:var(--red);font-size:13px;margin-top:12px">${getValidationHint()}</p>`;
       }
-    } else if (step === 5) {
+    } else if (step === 4) {
       html += `<h3 style="margin-bottom:12px">Any constraints?</h3>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Select all that apply.</p>
         <div style="display:flex;flex-direction:column;gap:0">`;
@@ -308,7 +317,7 @@
         </label>`;
       });
       html += '</div>';
-    } else if (step === 6) {
+    } else if (step === 5) {
       html += renderStep6();
     }
 
@@ -323,7 +332,7 @@
       html += '<div></div>';
     }
     if (step < TOTAL_STEPS) {
-      const canSkip = step >= 2 && step <= 5;
+      const canSkip = step >= 2 && step <= 4;
       const disabledStyle = valid ? '' : (canSkip ? '' : 'opacity:0.4;cursor:not-allowed;pointer-events:none');
       html += '<div style="display:flex;align-items:center;gap:16px">';
       const nextLabel = step === 1 ? 'Next stage' : 'Next';
@@ -541,6 +550,11 @@
       purpose: state.purpose, inputType: state.inputType, outputType: state.outputType,
       audience: state.audience, constraints: state.constraints, skipped: state.skipped,
     };
+    // B1: include per-topic entries so Step 1 picks persist. Backend save_step
+    // handler uses .update() semantics so legacy flat keys + topic_* keys coexist.
+    for (const topicId in topicState) {
+      answers[topicId] = topicState[topicId];
+    }
     const body = {
       step_progress: step,
       step_answers: answers,
@@ -585,11 +599,30 @@
     if (briefId) {
       api('/briefs/' + briefId + '/skip-step/' + skippedStep, { method: 'POST' }).catch(() => {});
     }
-    if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
+    if (step === 5 && !guardrailData) { renderStep(); loadGuardrails(); }
     else renderStep();
     toast('Skipped: ' + skippedName);
   };
   window._briefSelect = function (field, val) { state[field] = val; validationError = ''; renderStep(); };
+  window._briefPickTopic = function (topicId, val) {
+    topicState[topicId] = {
+      value: val,
+      state: 'green',
+      updated_at: new Date().toISOString(),
+    };
+    // Transitional dual-write: also set the legacy state field so the generator
+    // handoff (which currently reads state.inputType / state.outputType) keeps
+    // working during the B1→B3 window. Remove when B3 lands proper topic-to-
+    // generator piping.
+    if (topicId === 'topic_2_source_doc') {
+      state.inputType = TOPIC_2_TO_INPUT_TYPE[val] || '';
+    } else if (topicId === 'topic_3_output_format') {
+      state.outputType = TOPIC_3_TO_OUTPUT_TYPE[val] || '';
+    }
+    validationError = '';
+    renderStep();
+    saveBriefToServer();
+  };
   window._briefToggle = function (opt, checked) {
     if (checked && !state.constraints.includes(opt)) state.constraints.push(opt);
     if (!checked) state.constraints = state.constraints.filter(c => c !== opt);
@@ -686,7 +719,7 @@
     validationResult = null; validationError = '';
     _briefRevalidate();
   };
-  window._briefPrev = function () { saveStepState(); validationError = ''; validationResult = null; tier3Count = 0; tier3Selected.clear(); step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
+  window._briefPrev = function () { saveStepState(); validationError = ''; validationResult = null; tier3Count = 0; tier3Selected.clear(); step--; guardrailData = step < 5 ? null : guardrailData; renderStep(); };
 
   // Step 1 auto re-validate loop. No step advancement — caller decides when
   // to move on via the Next stage button. Stale-response guard: seq captured
@@ -734,7 +767,7 @@
     step++;
     await updateScore();
     await saveBriefToServer();
-    if (step === 6 && !guardrailData) { renderStep(); loadGuardrails(); }
+    if (step === 5 && !guardrailData) { renderStep(); loadGuardrails(); }
     else renderStep();
   };
   window._briefReview = async function () {
