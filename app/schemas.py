@@ -2,7 +2,9 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+import json
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 PromptType = Literal[
     "Governance",
@@ -386,3 +388,67 @@ class ProposalOut(BaseModel):
     applied_at: str | None
     applied_by: str | None
     abandoned_reason: str | None
+
+
+# ── PromptLibrary schemas ────────────────────────────────────────────────────
+
+LibraryDomain = Literal["finance", "general"]
+
+
+class PromptLibraryCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    full_text: str = Field(min_length=1)
+    summary: str | None = None
+    prompt_type: PromptType
+    input_type: str | None = None
+    output_type: str | None = None
+    domain: LibraryDomain = "general"
+    source_provenance: str | None = None
+    topic_coverage: list[str] = Field(default_factory=list)
+    classification_notes: str | None = None
+
+
+class PromptLibraryUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    full_text: str | None = Field(default=None, min_length=1)
+    summary: str | None = None
+    prompt_type: PromptType | None = None
+    input_type: str | None = None
+    output_type: str | None = None
+    domain: LibraryDomain | None = None
+    source_provenance: str | None = None
+    topic_coverage: list[str] | None = None
+    classification_notes: str | None = None
+
+
+class PromptLibraryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    library_id: str
+    title: str
+    full_text: str
+    summary: str | None
+    prompt_type: PromptType
+    input_type: str | None
+    output_type: str | None
+    domain: LibraryDomain
+    source_provenance: str | None
+    topic_coverage: list[str] = Field(default_factory=list)
+    classification_notes: str | None
+    created_at: str
+    updated_at: str
+
+    @field_validator("topic_coverage", mode="before")
+    @classmethod
+    def _parse_topic_coverage(cls, v):
+        if isinstance(v, str):
+            return json.loads(v) if v else []
+        return v
+
+
+class PromptLibraryListOut(BaseModel):
+    items: list[PromptLibraryOut]
+    total: int
+    page: int
+    page_size: int
+    has_next: bool

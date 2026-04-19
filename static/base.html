@@ -144,6 +144,7 @@ label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
     <a data-view="generator">Generator</a>
     <a data-view="brief">Brief Builder</a>
     <a data-view="templates">Templates</a>
+    <a data-view="library" class="admin-only" style="display:none">Library</a>
     <a data-view="import">Import &amp; Upgrade</a>
     <a data-view="audit">Audit Log</a>
   </div>
@@ -159,6 +160,7 @@ label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
   <div id="view-generator" class="view"></div>
   <div id="view-brief" class="view"></div>
   <div id="view-templates" class="view"></div>
+  <div id="view-library" class="view"></div>
   <div id="view-import" class="view"></div>
   <div id="view-audit" class="view"></div>
 </div>
@@ -324,8 +326,24 @@ function doLogout() {
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
+  applyRoleVisibility();
   startTokenRefresh();
   navigate('dashboard');
+}
+
+function currentRole() {
+  if (!authToken) return null;
+  try {
+    const payload = JSON.parse(atob(authToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.role || null;
+  } catch (e) { return null; }
+}
+
+function applyRoleVisibility() {
+  const role = currentRole();
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = (role === 'Admin') ? '' : 'none';
+  });
 }
 
 // Silent token refresh every 30 minutes
@@ -658,6 +676,7 @@ function showHelpSection(id){document.querySelectorAll('.help-section').forEach(
 <script src="/static/views/generator.js?v=20"></script>
 <script src="/static/views/brief.js?v=20"></script>
 <script src="/static/views/templates.js?v=20"></script>
+<script src="/static/views/library.js?v=20"></script>
 <script src="/static/views/import.js?v=20"></script>
 <script src="/static/views/audit.js?v=20"></script>
 <div id="app-version" style="position:fixed;bottom:8px;right:12px;font-family:var(--font-mono);font-size:11px;color:var(--text2);opacity:0.5;pointer-events:none;z-index:100"></div>

@@ -1,0 +1,118 @@
+# Prompt-library seed fixture.
+#
+# Entries with empty `full_text` are skipped (status 'skipped_empty') so the
+# fixture can hold placeholders awaiting paste.
+#
+# Entries missing any of prompt_type, input_type, output_type, summary,
+# topic_coverage or classification_notes are classified by Haiku during seed.
+# Haiku writes a one-sentence rationale into classification_notes so a human
+# can see why each tag was picked.
+#
+# Idempotent on title. Re-running the seed skips existing titles unless
+# --update is passed to scripts/seed_library.py.
+#
+# Topic IDs come from docs/CHECKLIST_DESIGN.md §B1 (Extraction).
+
+entries:
+
+  # ── Lombard placeholders — paste text then seed ──────────────────────────────
+  - title: "Lombard — Prospectus key-data extraction"
+    full_text: ""
+    domain: finance
+    source_provenance: "Lombard internal prompt library"
+
+  - title: "Lombard — Client suitability assessment"
+    full_text: ""
+    domain: finance
+    source_provenance: "Lombard internal prompt library"
+
+  # ── Hand-authored reference examples ────────────────────────────────────────
+  # Tags left blank; Haiku classifies on seed and writes rationale into
+  # classification_notes.
+
+  - title: "Fund prospectus subscription-terms extraction"
+    domain: finance
+    source_provenance: "Authored for Prompt Registry seed library, 2026"
+    full_text: |
+      You are a financial-document analyst. Extract subscription-terms data from the provided fund prospectus excerpt.
+
+      For every field listed below, return a JSON object with the field name, extracted value, source page, and confidence (high, medium, low).
+
+      Fields to extract:
+        - subscription_cutoff_time (include timezone; format: "HH:MM TZ")
+        - minimum_initial_investment (currency + amount)
+        - minimum_subsequent_investment (currency + amount; may be null)
+        - subscription_fee_percent (numeric, null if waived)
+        - redemption_cutoff_time (include timezone)
+        - settlement_days_t_plus (integer, T+N)
+        - lock_up_period_months (integer, null if none)
+
+      If a field is not present in the source, return value: null, page: null, confidence: "low", and add a one-line note explaining why (e.g. "not stated in prospectus extract").
+
+      Do not infer values. Do not aggregate across fields. Cite the source page for every non-null value. If the prospectus contains conflicting values across pages, report both with separate entries and flag the conflict.
+
+      Output strict JSON. No prose preamble, no markdown code fences.
+
+  - title: "Investment-policy clause extraction for compliance review"
+    domain: finance
+    source_provenance: "Authored for Prompt Registry seed library, 2026"
+    full_text: |
+      You are a compliance analyst reviewing an investment policy document for regulatory alignment.
+
+      Extract every clause that touches on the following regulated topics. For each extracted clause, return: clause_text (verbatim), topic_tag (one of: concentration_limits, leverage_limits, derivatives_use, liquidity_management, counterparty_exposure, esg_screening, restricted_instruments, valuation_methodology), page_reference, section_heading, and confidence.
+
+      Use only the eight topic_tag values above. If a clause addresses multiple topics, create one entry per topic.
+
+      If no clauses match a topic, return an entry with topic_tag set, clause_text: null, and a one-line reason (e.g. "no liquidity-management clause found in this document").
+
+      Return JSON: {"extracted_clauses": [...], "topics_with_no_clause": [...]}.
+
+      Preserve verbatim wording for clause_text — do not paraphrase. Cite the page number and section heading for every extracted clause. If two clauses contradict each other, include both and add a "conflict_note" field on each.
+
+  - title: "Regulatory filing material-change flag extraction"
+    domain: finance
+    source_provenance: "Authored for Prompt Registry seed library, 2026"
+    full_text: |
+      You are an analyst reviewing a regulatory filing (e.g. SEC 10-Q, 10-K, 8-K, FINMA prudential disclosure) to flag material changes since the prior period.
+
+      For each material change identified, return: change_description, category (one of: financial_performance, risk_factors, governance_personnel, regulatory_action, litigation, accounting_policy, capital_structure, operations), quantitative_impact (currency amount or percentage, null if qualitative), source_page, source_section, and prior_period_baseline.
+
+      Do not flag routine updates, rephrasings, or numeric updates under 5% change-on-period unless explicitly flagged as material by the issuer.
+
+      For every flagged change, cite the specific page and section. For quantitative changes, show both current-period and prior-period values.
+
+      If the filing contains no material changes in a given category, report {"category": "...", "status": "no_material_change", "reviewed": true}.
+
+      Output JSON: {"material_changes": [...], "categories_reviewed": [...]}. No prose preamble.
+
+  - title: "Client email thread action-item classification"
+    domain: finance
+    source_provenance: "Authored for Prompt Registry seed library, 2026"
+    full_text: |
+      You are a relationship-manager assistant. Classify every action item mentioned in the provided client email thread.
+
+      For each action item, return: action_description (one sentence, verbatim or lightly paraphrased), owner (one of: client, relationship_manager, operations, compliance, legal, external_third_party), priority (one of: urgent, high, normal, low), deadline (ISO date or null), source_message_id_or_number, and depends_on (list of other action_description strings, empty list if independent).
+
+      Do not infer owners that are not stated or clearly implied. If ownership is ambiguous, set owner: "unclear" and add a one-line clarification question in a separate "open_questions" field.
+
+      Exclude pleasantries, acknowledgements, and rhetorical questions. Include only items that require a concrete follow-up action.
+
+      Deadlines: map relative phrases to absolute dates using the latest email timestamp in the thread as anchor ("by Friday" + thread dated 14 April → 2026-04-18). If the anchor date is ambiguous, set deadline: null and note in open_questions.
+
+      Output JSON: {"action_items": [...], "open_questions": [...]}. No prose preamble.
+
+  - title: "Counterparty due-diligence risk-signal classification"
+    domain: finance
+    source_provenance: "Authored for Prompt Registry seed library, 2026"
+    full_text: |
+      You are a KYC / counterparty due-diligence analyst. Classify every risk signal present in the provided due-diligence dossier (background reports, media summaries, regulatory filings).
+
+      For each risk signal, return: signal_description, category (one of: sanctions_exposure, adverse_media, litigation, regulatory_sanction, pep_status, beneficial_ownership_concern, financial_distress, reputational), severity (critical, high, medium, low), source_document, source_page, date_of_underlying_event (ISO or null), and jurisdiction.
+
+      Apply the following tie-break rules for severity when the source text is ambiguous: any criminal proceeding → at least high; any adverse media older than 7 years → downgrade one level unless renewed; any regulator-imposed fine over USD 1m → at least high; sanctioned individual or entity match → critical regardless of recency.
+
+      Flag every signal, even low-severity ones. Deduplicate signals that reference the same underlying event across sources — keep the one with the highest-credibility source and list the others under "corroborating_sources".
+
+      If you find no risk signals in a category, report {"category": "...", "status": "no_signal_found", "sources_reviewed": [...]}.
+
+      Output JSON: {"risk_signals": [...], "categories_with_no_signal": [...]}. Cite source document and page for every signal. No prose preamble.

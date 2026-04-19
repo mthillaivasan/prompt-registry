@@ -79,6 +79,22 @@ def run_migrations(engine) -> None:
             sort_order INTEGER NOT NULL DEFAULT 0
         """, is_sqlite)
 
+        _create_table_if_not_exists(conn, "prompt_library", """
+            library_id VARCHAR(36) PRIMARY KEY,
+            title VARCHAR UNIQUE NOT NULL,
+            full_text TEXT NOT NULL,
+            summary TEXT,
+            prompt_type VARCHAR NOT NULL,
+            input_type VARCHAR,
+            output_type VARCHAR,
+            domain VARCHAR NOT NULL DEFAULT 'general',
+            source_provenance TEXT,
+            topic_coverage TEXT NOT NULL DEFAULT '[]',
+            classification_notes TEXT,
+            created_at VARCHAR NOT NULL,
+            updated_at VARCHAR NOT NULL
+        """, is_sqlite)
+
         _add_column(conn, "prompt_versions", "upgrade_proposal_id", "VARCHAR(36)", is_sqlite)
 
         # Transitional split: deployment_target → ai_platform + output_destination.

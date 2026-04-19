@@ -302,6 +302,34 @@ CREATE TABLE prompt_templates (
     sort_order                 INTEGER NOT NULL DEFAULT 0
 );
 
+-- ── prompt_library ────────────────────────────────────────────────────────────
+-- Reference library of high-quality example prompts. Surfaced in Brief Builder
+-- coaching (Drop L2) and used as few-shot context for validate-topic.
+-- Distinct from prompt_templates: library entries are reference material, not
+-- assembly fragments fed into the generator.
+CREATE TABLE prompt_library (
+    library_id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    title                TEXT UNIQUE NOT NULL,
+    full_text            TEXT NOT NULL,
+    summary              TEXT,
+    prompt_type          TEXT NOT NULL,
+    input_type           TEXT,
+    output_type          TEXT,
+    domain               TEXT NOT NULL DEFAULT 'general',
+    source_provenance    TEXT,
+    topic_coverage       TEXT NOT NULL DEFAULT '[]',
+    classification_notes TEXT,
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL,
+
+    CONSTRAINT ck_prompt_library_type
+        CHECK (prompt_type IN (
+            'Governance','Analysis','Comms','Classification',
+            'Summarisation','Extraction','Comparison','Risk Review')),
+    CONSTRAINT ck_prompt_library_domain
+        CHECK (domain IN ('finance','general'))
+);
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- DEFERRED FOREIGN KEYS (circular references)
 -- ══════════════════════════════════════════════════════════════════════════════

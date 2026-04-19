@@ -38,6 +38,7 @@ from app.models import (  # noqa: F401 — imports register all models with Base
     InjectionPattern,
     Prompt,
     PromptComponent,
+    PromptLibrary,
     PromptTemplate,
     PromptVersion,
     ScoringDimension,

@@ -415,3 +415,33 @@ class PromptTemplate(Base):
     applicable_to_client_types = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
+
+
+class PromptLibrary(Base):
+    __tablename__ = "prompt_library"
+
+    library_id = Column(String(36), primary_key=True, default=_uuid)
+    title = Column(String, unique=True, nullable=False)
+    full_text = Column(Text, nullable=False)
+    summary = Column(Text, nullable=True)
+    prompt_type = Column(String, nullable=False)
+    input_type = Column(String, nullable=True)
+    output_type = Column(String, nullable=True)
+    domain = Column(String, nullable=False, default="general")
+    source_provenance = Column(Text, nullable=True)
+    topic_coverage = Column(Text, nullable=False, default="[]")
+    classification_notes = Column(Text, nullable=True)
+    created_at = Column(String, nullable=False, default=_utcnow)
+    updated_at = Column(String, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "prompt_type IN ('Governance','Analysis','Comms','Classification',"
+            "'Summarisation','Extraction','Comparison','Risk Review')",
+            name="ck_prompt_library_type",
+        ),
+        CheckConstraint(
+            "domain IN ('finance','general')",
+            name="ck_prompt_library_domain",
+        ),
+    )
