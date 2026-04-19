@@ -5,6 +5,7 @@ Mounted under the /prompts prefix so existing endpoint paths are preserved.
 
 import json
 import os
+from datetime import datetime
 
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,6 +25,7 @@ from app.schemas import (
     ValidateBriefResponse,
 )
 from services.guardrails import resolve_guardrails
+from services.variable_resolver import VariableResolver
 
 router = APIRouter(prefix="/prompts", tags=["generation"])
 
@@ -404,6 +406,12 @@ def generate_prompt_text(
         if generated.startswith("```"):
             lines = generated.split("\n")
             generated = "\n".join(lines[1:-1])
+
+        generated = VariableResolver().resolve(
+            generated,
+            generation_date=datetime.utcnow().strftime("%Y-%m-%d"),
+            author=current_user.name or current_user.email,
+        )
 
         db.add(AuditLog(
             user_id=current_user.user_id,
