@@ -29,7 +29,14 @@
   // "not yet available" placeholder for topics 2-5+4b — design §B1 / §B6 #5.
   const PROMPT_TYPES = ['Extraction', 'Classification', 'Summarisation', 'Comparison', 'Analysis', 'Comms', 'Governance', 'Risk Review'];
   const EXTRACTION_TOPICS = [
-    { id: 'topic_1_prompt_type',  name: 'Prompt Type',                                       required: true,  options: PROMPT_TYPES },
+    // B2 note: topic_1_prompt_type is multi-select. When validate-topic fires
+    // against sibling_answers, the rubric selection rule is:
+    //   (1) if "Extraction" is in the picked array, use the Extraction rubric
+    //   (2) else use the first picked type's rubric
+    //   (3) if that type has no rubric defined, return 501 "rubric not defined"
+    // sibling_answers expects string values at the API layer — join the array
+    // with ", " or pick the primary type when serialising.
+    { id: 'topic_1_prompt_type',  name: 'Prompt Type',                                       required: true,  multiSelect: true, options: PROMPT_TYPES },
     { id: 'topic_2_source_doc',   name: 'Source document type',                              required: false, options: ['Prospectus', 'Policy', 'Circular', 'Regulatory filing', 'Report', 'Contract', 'Email thread', 'Form responses', 'Data table', 'Free text', 'Other'] },
     { id: 'topic_3_output_format',name: 'Output format',                                     required: false, options: ['JSON object', 'Table/CSV', 'Markdown extraction report', 'Flag report', 'Data extraction payload', 'Other'] },
     { id: 'topic_4_target_system',name: 'Target system (where the output goes)',             required: false, options: ['Simcorp', 'Temenos', 'Charles River', 'Bloomberg AIM', 'Murex', 'Internal spreadsheet', 'Downstream AI or pipeline', 'Advisory only — no system', 'Other'] },
@@ -175,7 +182,11 @@
   };
 
   function isStepValid() {
-    if (step === 1) return !!(topicState.topic_1_prompt_type && topicState.topic_1_prompt_type.state === 'green');
+    if (step === 1) {
+      const e = topicState.topic_1_prompt_type;
+      if (!e || e.state !== 'green') return false;
+      return Array.isArray(e.value) ? e.value.length > 0 : !!e.value;
+    }
     if (step === 2) return state.purpose.length >= 20;
     if (step === 3) return !!state.audience;
     return true; // steps 4, 5 always valid
@@ -239,34 +250,27 @@
         </div>
         <p style="color:var(--text2);margin-bottom:20px;font-size:12px">Client/owner/role records who the requirement came from, for the audit trail.</p>`;
 
-      const pickedType = topicState.topic_1_prompt_type && topicState.topic_1_prompt_type.value;
-      const isExtraction = pickedType === 'Extraction' || !pickedType;
+      // All structured topics render regardless of Prompt Type. They are
+      // generic metadata; Phase A's Extraction-only scope applies to prose
+      // topic coaching (B2), not structured capture.
       EXTRACTION_TOPICS.forEach(topic => {
         const entry = topicState[topic.id];
         const picked = entry && entry.value;
-        // Only Extraction is wired in Phase A. For non-Extraction prompt types,
-        // collapse topics 2+ behind a placeholder.
-        const isTopic1 = topic.id === 'topic_1_prompt_type';
-        if (!isTopic1 && !isExtraction) {
-          html += `<div style="margin-bottom:14px;opacity:0.5">
-            <div style="font-size:14px;font-weight:600;margin-bottom:4px">${esc(topic.name)}</div>
-            <div style="font-size:12px;color:var(--text2)">Topic list not yet available for ${esc(pickedType)}. Only Extraction has a specced topic list in Phase A.</div>
-          </div>`;
-          return;
-        }
+        const pickedArr = Array.isArray(picked) ? picked : (picked ? [picked] : []);
+        const summary = pickedArr.join(', ');
         html += `<div style="margin-bottom:14px">
           <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
             <span style="font-size:14px;font-weight:600">${esc(topic.name)}</span>`;
         if (topic.required) {
           html += `<span style="font-size:11px;color:var(--amber);font-family:var(--font-mono)">required</span>`;
         }
-        if (picked) {
-          html += `<span style="font-size:11px;color:var(--green);font-family:var(--font-mono)">&#10003; ${esc(picked)}</span>`;
+        if (summary) {
+          html += `<span style="font-size:11px;color:var(--green);font-family:var(--font-mono)">${esc(summary)}</span>`;
         }
         html += `</div>
           <div style="display:flex;flex-wrap:wrap;gap:6px">`;
         topic.options.forEach(opt => {
-          const sel = picked === opt;
+          const sel = pickedArr.includes(opt);
           const cls = sel ? 'btn btn-gold btn-sm' : 'btn btn-outline btn-sm';
           html += `<button class="${cls}" onclick="window._briefPickTopic('${esc(topic.id)}','${esc(opt)}')">${esc(opt)}</button>`;
         });
@@ -605,15 +609,26 @@
   };
   window._briefSelect = function (field, val) { state[field] = val; validationError = ''; renderStep(); };
   window._briefPickTopic = function (topicId, val) {
-    topicState[topicId] = {
-      value: val,
-      state: 'green',
-      updated_at: new Date().toISOString(),
-    };
-    // Transitional dual-write: also set the legacy state field so the generator
-    // handoff (which currently reads state.inputType / state.outputType) keeps
-    // working during the B1→B3 window. Remove when B3 lands proper topic-to-
-    // generator piping.
+    const topic = EXTRACTION_TOPICS.find(t => t.id === topicId);
+    const now = new Date().toISOString();
+    if (topic && topic.multiSelect) {
+      const current = topicState[topicId] && topicState[topicId].value;
+      const arr = Array.isArray(current) ? current.slice() : (current ? [current] : []);
+      const idx = arr.indexOf(val);
+      if (idx >= 0) arr.splice(idx, 1);
+      else arr.push(val);
+      if (arr.length === 0) {
+        delete topicState[topicId];
+      } else {
+        topicState[topicId] = { value: arr, state: 'green', updated_at: now };
+      }
+    } else {
+      topicState[topicId] = { value: val, state: 'green', updated_at: now };
+    }
+    // Transitional dual-write: picking single-select topic 2 / 3 also sets the
+    // legacy state field so the generator handoff (state.inputType / state.outputType)
+    // keeps working during the B1→B3 window. Remove when B3 lands proper
+    // topic-to-generator piping.
     if (topicId === 'topic_2_source_doc') {
       state.inputType = TOPIC_2_TO_INPUT_TYPE[val] || '';
     } else if (topicId === 'topic_3_output_format') {

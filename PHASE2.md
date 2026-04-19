@@ -322,3 +322,11 @@ Not in this sequence but parallel:
 `validate_brief` currently uses one generic three-element rubric (Specific data / Clear output / Clear next step) for every prompt type. Extraction briefs, classification briefs, summarisation briefs, and comparison briefs each have different mandatory elements — classification needs defined categories and tie-break rules; extraction needs confidence reporting and a null-handling policy; summarisation needs length constraint and inclusion/exclusion criteria; comparison needs defined criteria and a scoring basis.
 
 Swap in a rubric selected by `prompt_type` so validation pressure matches the real prompt-design decisions for that class. Non-trivial: needs 4-6 tailored rubrics and a selector. Estimate: 3-4 hours.
+
+### Brief deletion workflow missing
+
+Observation from 19 April B1 smoke testing: briefs accumulate on the dashboard with no way to remove them. Only /briefs/{id}/abandon exists, which sets status but does not remove from list view.
+
+Needed: DELETE /briefs/{id} endpoint (with appropriate authorisation — Maker can delete own drafts; Checker/Admin can delete any), dashboard UI with confirmation, cascade behaviour for briefs referenced by prompts (soft-delete vs hard-delete decision).
+
+Estimate: 1-2 hours. Priority: medium. Does not block functional flow but degrades day-to-day usability.
