@@ -24,6 +24,7 @@ from app.models import (  # noqa: F401 — imports register all models with Base
     User,
 )
 from app.migrations import run_migrations
+from app.version import COMMIT_HASH
 from app.routers import auth as auth_router
 from app.routers import briefs as briefs_router
 from app.routers import compliance as compliance_router
@@ -63,6 +64,11 @@ app = FastAPI(
 @app.get("/")
 async def root():
     return FileResponse("static/base.html")
+
+
+@app.get("/version")
+def get_version():
+    return {"commit": COMMIT_HASH}
 
 
 @app.get("/audit-log")
