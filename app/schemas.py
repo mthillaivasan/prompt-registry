@@ -113,9 +113,15 @@ class GenerateResponse(BaseModel):
     prompt_text: str
 
 
+class ConversationEntry(BaseModel):
+    question: str = ""
+    answer: str = ""
+    skipped: bool = False
+
+
 class ValidateBriefRequest(BaseModel):
     description: str = Field(min_length=1)
-    conversation_history: list[str] = []
+    conversation_history: list[ConversationEntry] = []
 
 
 class ValidateBriefResponse(BaseModel):

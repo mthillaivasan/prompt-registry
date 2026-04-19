@@ -32,81 +32,64 @@ router = APIRouter(prefix="/prompts", tags=["generation"])
 
 # ── Validate brief description via Claude ────────────────────────────────────
 
-_VALIDATE_BRIEF_PROMPT = """\
-You are a strict quality gate reviewing an AI prompt brief for a \
-regulated financial services firm. Classify into three tiers.
-
-The user has provided this description:
-"{user_input}"
+_VALIDATE_BRIEF_SYSTEM = """\
+You are a strict quality gate reviewing an AI prompt brief for a regulated financial services firm. Classify the brief into three tiers based on whether a prompt engineer could build a correct, unambiguous prompt from it.
 
 THREE MANDATORY ELEMENTS — all three must be present for Tier 1:
 
-1. SPECIFIC DATA OR CONTENT — not "key data", "information", or \
-"documents". Must name what specifically is being extracted, summarised, \
-or assessed. Acceptable: "subscription cut-off times", "FINMA obligations", \
-"risk ratings", "counterparty names and settlement dates". \
-Unacceptable: "key data", "relevant information", "important details".
+1. SPECIFIC DATA OR CONTENT — not "key data", "information", or "documents". Must name what specifically is being extracted, summarised, or assessed. Acceptable: "subscription cut-off times", "FINMA obligations", "risk ratings", "counterparty names and settlement dates". Unacceptable: "key data", "relevant information", "important details".
 
-2. CLEAR OUTPUT — not just "structured assessment" or "useful output". \
-Must indicate what the output contains or how it is structured. \
-Acceptable: "a table of cut-off times by share class", "a one-page \
-summary of obligations with action flags", "a JSON object with named \
-fields". Unacceptable: "useful data", "structured output", "summary".
+2. CLEAR OUTPUT — not just "structured assessment" or "useful output". Must indicate what the output contains or how it is structured. Acceptable: "a table of cut-off times by share class", "a one-page summary of obligations with action flags", "a JSON object with named fields". Unacceptable: "useful data", "structured output", "summary".
 
-3. CLEAR NEXT STEP — who uses the output and what they do with it. \
-Acceptable: "for operations staff to manually key into Simcorp", \
-"for the CRO to brief the board", "for the compliance team to assess \
-against FINMA requirements". \
-Unacceptable: "useful for manual input", "for the team", "for core systems".
+3. CLEAR NEXT STEP — who uses the output and what they do with it. Acceptable: "for operations staff to manually key into Simcorp", "for the CRO to brief the board", "for the compliance team to assess against FINMA requirements". Unacceptable: "useful for manual input", "for the team", "for core systems".
 
-ALSO REJECT if the input has broken grammar, is a sentence fragment, \
-or appears hasty — ask the user to rephrase clearly.
+If the brief has broken grammar, is a sentence fragment, or appears hasty, return Tier 3 and ask the user to rephrase clearly.
 
-TIER 1 — All three elements present and specific. \
-Return JSON: {{"tier": 1}}
+=== TIER 1 ===
+All three elements present and specific.
+Return: {"tier": 1}
 
-TIER 2 — Two of three elements present. One element is weak but \
-inferable. Return JSON: \
-{{"tier": 2, "suggestion": "one sentence", \
-"suggested_addition": "the specific phrase to add"}}
+=== TIER 2 ===
+Two of three elements present. One element is weak but inferable.
+Return: {"tier": 2, "suggestion": "...", "suggested_addition": "..."}
 
-TIER 2 SUGGESTION RULES — strictly follow these:
-- Must reference actual words or phrases from the user's input
-- Must suggest a specific addition, not a general improvement
+TIER 2 RULES:
+- The suggestion must reference actual words or phrases from the brief
+- The suggestion must propose a specific addition, not a general improvement
 - One sentence maximum
 - Must address a gap that would materially improve the generated prompt
-- If the user uses informal or vague terms for a system, platform, or \
-process (e.g. "cool banking application", "the system", "our tool"), \
-suggest naming it specifically with examples from the domain \
-(e.g. Simcorp, Temenos, Charles River, Bloomberg AIM)
+- If the brief uses a vague term for a system, platform, or process, propose naming it specifically
+- Do not offer generic prompt-engineering advice
 
-BAD suggestion: "The output structure is clear but needs to specify \
-which staff will use this data"
-GOOD suggestion: "The target system is described as a banking \
-application — do you know its name? Naming it specifically (e.g. \
-Simcorp, Temenos, Charles River) will make the prompt more precise."
-GOOD suggestion: "Consider naming the team who loads data into \
-[system name from input] — this helps the prompt handle errors \
-and edge cases specific to that handoff"
+=== TIER 3 ===
+One or more elements missing, or vague. Generic language used.
+Return: {"tier": 3, "question": "...", "options": [6 items], "free_text_placeholder": "Or describe..."}
 
-TIER 3 — One or more elements missing or vague. Generic language used. \
-Return JSON: \
-{{"tier": 3, "question": "one targeted question about the weakest missing element", \
-"options": ["option1", "option2", "option3", "option4", "option5", "option6"], \
-"free_text_placeholder": "Or describe..."}}
+TIER 3 QUESTION RULES — read carefully:
 
-Options must be domain-specific choices relevant to the question.
+The question must target a DOMAIN DETAIL that would materially change the STRUCTURE or LOGIC of the generated prompt. It must not ask for operational context that the prompt would simply pass through.
 
-Example that MUST be Tier 3: "This is a prompt will take key data from \
-a funds prospectus document that will be useful for manual input into \
-the core systems" — "key data" is not specific, "useful for manual input" \
-does not describe the output, "core systems" is not specific.
+The test: if you knew the answer, would a prompt engineer structure the prompt differently, add branching logic, add normalisation, add a new section, or alter what the model is asked to do? If yes, ask. If the answer just fills a blank (a date, a threshold, a name, a time), do NOT ask.
 
-Example that is Tier 1: "Extract subscription cut-off times and minimum \
-investment amounts from fund prospectus documents into a table by share \
-class for operations staff to key into Simcorp Dimension before 14:00 CET"
+The question must be grounded in the specific workflow described in the brief — not drawn from a generic prompt-engineering checklist.
 
-Return ONLY valid JSON. No preamble."""
+OPTIONS RULES:
+- Exactly 6 options
+- Orthogonal — no option may be a subset, rewording, or special case of another
+- Each option is a complete phrase the user could pick as their answer, not a category label
+- Multi-select is supported: generate options that plausibly co-occur in real workflows so users can pick combinations where appropriate
+- Each option must be grounded in the specific brief — do not paraphrase generic prompt-engineering concerns
+
+DO NOT re-ask anything covered in the PRIOR COACHING block of the user message.
+
+If PRIOR COACHING has resolved all gaps that would materially change the structure or logic of the generated prompt, return Tier 1 even if the three MANDATORY ELEMENTS are not all strictly satisfied. Coaching completeness overrides the rubric once structure-changing gaps are closed.
+
+CLASSIFICATION REFERENCE:
+Example that MUST be Tier 3: "This is a prompt will take key data from a funds prospectus document that will be useful for manual input into the core systems" — "key data" is not specific, "useful for manual input" does not describe the output, "core systems" is not specific.
+
+Example that is Tier 1: "Extract subscription cut-off times and minimum investment amounts from fund prospectus documents into a table by share class for operations staff to key into Simcorp Dimension before 14:00 CET"
+
+Return ONLY valid JSON. No preamble, no markdown fences."""
 
 
 _DEDUP_PROMPT = """\
@@ -146,14 +129,30 @@ def validate_brief(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    prompt_text = _VALIDATE_BRIEF_PROMPT.replace("{user_input}", body.description)
+    # Keep only real Tier-3 Q&A pairs. Frontend also pushes markers for
+    # accept/skip/abandon events ({"question": "validation"|"track", ...});
+    # those are workflow telemetry, not coaching content.
+    relevant = [
+        e for e in body.conversation_history
+        if not e.skipped and e.question and e.question not in ("validation", "track")
+    ]
+    if relevant:
+        history_block = "\n\n".join(f"Q: {e.question}\nA: {e.answer}" for e in relevant)
+    else:
+        history_block = "None."
+    user_message = (
+        f"BRIEF DRAFT:\n{body.description}\n\n"
+        f"PRIOR COACHING IN THIS SESSION:\n{history_block}"
+    )
+
     try:
         client = anthropic.Anthropic()
-        print(f"[Validation] Input: {body.description[:80]}")
+        print(f"[Validation] Input: {body.description[:80]}; prior_Qs: {len(relevant)}")
         response = client.messages.create(
             model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
             max_tokens=512,
-            messages=[{"role": "user", "content": prompt_text}],
+            system=_VALIDATE_BRIEF_SYSTEM,
+            messages=[{"role": "user", "content": user_message}],
         )
         raw = response.content[0].text.strip()
         print(f"[Validation] Claude raw: {raw[:200]}")

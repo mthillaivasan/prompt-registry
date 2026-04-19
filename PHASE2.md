@@ -254,3 +254,9 @@ Remaining work: author plain-English instructional_text for each. Approx 10-15 m
 Blocked on Session B (admin/dimensions page). Without the admin page, each migration is a code-commit-push-deploy cycle, which is heavyweight for content work. With the admin page, each migration is a UI edit — 10 min end to end.
 
 Suggested sequence: Session B first, then bulk dimension authoring, then the three priorities above (multi-select, page citations, cost display).
+
+### 5. Brief-type-aware validation rubrics
+
+`validate_brief` currently uses one generic three-element rubric (Specific data / Clear output / Clear next step) for every prompt type. Extraction briefs, classification briefs, summarisation briefs, and comparison briefs each have different mandatory elements — classification needs defined categories and tie-break rules; extraction needs confidence reporting and a null-handling policy; summarisation needs length constraint and inclusion/exclusion criteria; comparison needs defined criteria and a scoring basis.
+
+Swap in a rubric selected by `prompt_type` so validation pressure matches the real prompt-design decisions for that class. Non-trivial: needs 4-6 tailored rubrics and a selector. Estimate: 3-4 hours.
