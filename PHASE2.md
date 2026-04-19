@@ -344,3 +344,43 @@ Classification preserved in `app/seed.py` `_CONTENT_TYPES_BY_CODE` and synced on
 Estimate: 2-3 hours for wrapper-metadata panel (UI + read-only rendering). Registry-policy enforcement is a separate multi-session arc.
 
 If SIT later reveals a source-citation gap because REG_D4 was classified wrapper_metadata, revisit the classification — the "document reasoning" portion of REG_D4 was borderline prompt_content and was placed wrapper per the dominant-content heuristic.
+
+### Brief Builder example library
+
+Seed a library of high-quality prompt examples that (a) surface in Brief Builder coaching as reference material, (b) feed into validate-topic as few-shot context for better grounded probes, (c) feed into generator as structural references for cleaner output. Three roles, one data source.
+
+Split into two sub-drops.
+
+**Drop L1 — Seed the library.**
+
+- New `prompt_library` table (or extend `PromptTemplate` — implementation recon decides): fields `id`, `title`, `full_text`, `summary`, `prompt_type` (required), `input_type` (nullable), `output_type` (nullable), `domain` (finance/general), `source_provenance`, `topic_coverage` (JSON array of topic_ids), `created_at`.
+- Seed loader `scripts/seed_library.py`: accepts a YAML fixture file. For entries missing tags, calls Haiku with a classification prompt. Idempotent.
+- Fixture starter content: 2 Lombard entries (user to paste text at build time), 15–20 auto-fetched from docs.claude.com/en/resources/prompt-library via web_fetch, Claude auto-tags each.
+- Admin UI at `/library` (Admin-only): table of entries with inline edit and delete. Pagination 25 per page.
+- Tests: seed idempotency, tag auto-population, list/edit/delete authorisation.
+
+**Drop L2 — Wire into Brief Builder.**
+
+- When user reaches Step 2 with `prompt_type` picked, query library for matches by `prompt_type` + `topic_coverage` overlap.
+- Each topic card gets a "Reference example" link opening a panel showing how similar prompts handle this specific topic.
+- `validate-topic` request gains optional `reference_examples` field. When present, system prompt includes few-shot context: "Here's how similar prompts have handled this topic: [examples]."
+
+Sequence: L1 ships first. L2 after L1 smoke.
+
+### Always-draft proposals on validate-topic
+
+Observation from 19 April smoke test: the tier-3 six-option pills don't match the granularity of real answers. Users want paragraph-level nuance, not single-line picks. Tier-2 suggestions work better (full text to accept or edit) but aren't always produced.
+
+Change: `validate-topic` always returns a `proposed_text` field when there is a gap to address — a short paragraph (1–3 sentences) Claude drafts as a proposed addition for the focal topic. Must reference specifics from the user's brief and sibling topic values; not generic advice. When `state == "green"`, `proposed_text` is `null` — no draft generated when there's no gap. Frontend renders as an editable textarea pre-filled with the proposal. User edits or accepts, submits.
+
+**Backend:** `_VALIDATE_TOPIC_SYSTEM` system prompt extended to mandate `proposed_text` alongside existing `state` / `suggestion` / `question` / `options` for non-green states. `ValidateTopicResponse` schema adds `proposed_text: str | None = None`.
+
+**Frontend (`brief.js` `_renderProseTopicCards`):** if `proposed_text` is present, render an editable textarea pre-filled with it, `Submit answer` (takes textarea content verbatim as the answer) and `Ignore this line of thought` (dismisses). Pills become secondary shortcuts — clicking a pill toggles its text in/out of the textarea with `\n` separator (first click appends, second click on the same pill removes that pill's text). Per-card tracking of which pills are "on" maintains the toggle; if user manually edits the seeded pill text, the toggle state may drift — acceptable edge case, don't over-engineer.
+
+**Submit payload is textarea content verbatim.** Pills seed the textarea; the textarea is authoritative. No separate pills array on submit. Removes the double-counting that the previous pills-plus-free-text flow risked.
+
+**Not replacing** the current suggestion / question / options model — augmenting with an always-draft layer.
+
+**Out of scope:** removing pills entirely; changes to generate or restructure flow; library integration (Drop L2 handles that).
+
+Sequence: ships after Drop L2.
