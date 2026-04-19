@@ -53,6 +53,7 @@ viewInits.detail = async function (params) {
           </div>
         </div>
         <div class="prompt-text" id="detail-prompt-text" style="min-height:300px"></div>
+        <div id="detail-cost-line" style="margin-top:8px;font-size:12px;color:var(--text2)"></div>
       </div>
     </div>`;
 
@@ -102,6 +103,21 @@ function renderDetailPromptText() {
   textEl.textContent = _detailSelectedVersion.prompt_text || '(empty)';
   const activeTag = _detailSelectedVersion.is_active ? ' — Active' : '';
   labelEl.textContent = 'v' + _detailSelectedVersion.version_number + activeTag;
+
+  // Drop 1: token + cost line under the prompt text. NULL on legacy rows → "—".
+  const costEl = document.getElementById('detail-cost-line');
+  if (costEl) {
+    const v = _detailSelectedVersion;
+    if (v.token_count == null) {
+      costEl.textContent = 'Tokens and cost: — (legacy version; re-save to populate)';
+    } else {
+      const tokenStr = Number(v.token_count).toLocaleString();
+      const cost = parseFloat(v.estimated_cost_usd || '0');
+      const costStr = cost < 0.01 ? '<$0.01' : '~$' + cost.toFixed(2);
+      costEl.textContent = '~' + tokenStr + ' tokens · ' + costStr +
+        ' per invocation (input only, estimated)';
+    }
+  }
 }
 
 function renderDetailVersionRows(prompt) {

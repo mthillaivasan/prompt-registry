@@ -289,6 +289,8 @@ class PromptVersion(Base):
     cache_valid = Column(Boolean, nullable=False, default=True)
     upgrade_proposal_id = Column(String(36), nullable=True)         # FK upgrade_proposals (circular)
     injection_scan_result = Column(Text, nullable=True)             # JSON
+    token_count = Column(Integer, nullable=True)                    # approx; see services/pricing.py
+    estimated_cost_usd = Column(String, nullable=True)              # stored as string for decimal safety
     created_by = Column(String(36), ForeignKey("users.user_id"), nullable=False)
     created_at = Column(String, nullable=False, default=_utcnow)
     approved_by = Column(String(36), ForeignKey("users.user_id"), nullable=True)

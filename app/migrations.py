@@ -97,6 +97,10 @@ def run_migrations(engine) -> None:
 
         _add_column(conn, "prompt_versions", "upgrade_proposal_id", "VARCHAR(36)", is_sqlite)
 
+        # Drop 1: token count and estimated cost per invocation (see services/pricing.py).
+        _add_column(conn, "prompt_versions", "token_count", "INTEGER", is_sqlite)
+        _add_column(conn, "prompt_versions", "estimated_cost_usd", "VARCHAR", is_sqlite)
+
         # Transitional split: deployment_target → ai_platform + output_destination.
         # Both nullable; existing rows keep deployment_target, new writes dual-populate.
         _add_column(conn, "prompts", "ai_platform", "VARCHAR", is_sqlite)

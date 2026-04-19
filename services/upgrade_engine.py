@@ -383,6 +383,8 @@ def apply_proposal(
     )
     next_number = (latest.version_number + 1) if latest else 1
 
+    from services.pricing import count_tokens, estimate_cost_usd
+    _tokens = count_tokens(improved)
     version = PromptVersion(
         prompt_id=target_prompt_id,
         version_number=next_number,
@@ -392,6 +394,8 @@ def apply_proposal(
         created_by=user_id,
         upgrade_proposal_id=proposal.proposal_id,
         is_active=False,
+        token_count=_tokens,
+        estimated_cost_usd=f"{estimate_cost_usd(_tokens):.4f}",
     )
     db.add(version)
     db.flush()

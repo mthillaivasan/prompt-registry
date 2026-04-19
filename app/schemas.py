@@ -72,6 +72,8 @@ class PromptVersionOut(BaseModel):
     approved_by: str | None
     approved_at: str | None
     is_active: bool
+    token_count: int | None = None
+    estimated_cost_usd: str | None = None
 
 
 class PromptOut(BaseModel):

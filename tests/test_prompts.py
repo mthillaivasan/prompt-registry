@@ -94,6 +94,19 @@ def test_create_prompt_requires_prompt_text(client, auth_headers):
     assert resp.status_code == 422
 
 
+def test_create_prompt_populates_token_count_and_cost(client, auth_headers, db):
+    """Drop 1: new v1 row must carry token_count + estimated_cost_usd."""
+    resp = _create_prompt(client, auth_headers)
+    assert resp.status_code == 201, resp.text
+    v1 = resp.json()["versions"][0]
+    assert v1["token_count"] is not None
+    assert v1["token_count"] > 0
+    assert v1["estimated_cost_usd"] is not None
+    # Stored as decimal-safe string (e.g. "0.0075")
+    cost = float(v1["estimated_cost_usd"])
+    assert cost > 0
+
+
 # ── List & get prompts ───────────────────────────────────────────────────────
 
 def test_list_prompts_returns_only_user_visible(client, auth_headers):

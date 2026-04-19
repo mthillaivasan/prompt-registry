@@ -27,6 +27,7 @@ from app.schemas import (
     ValidateTopicResponse,
 )
 from services.guardrails import resolve_guardrails
+from services.pricing import DEFAULT_OUTPUT_TOKENS_ESTIMATE, count_tokens, estimate_cost_usd
 from services.topic_rubrics import (
     UnknownTopicError,
     build_validate_topic_system_prompt,
@@ -575,3 +576,34 @@ def generate_prompt_text(
         raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Claude API error: {str(e)}")
+
+
+# ── Token count + cost estimate — Drop 1 ─────────────────────────────────────
+# Lightweight endpoint for the generator screen to surface tokens and cost
+# after a Generate click and on subsequent textarea edits (debounced).
+# See services/pricing.py for the counter + rate constants.
+
+from pydantic import BaseModel as _BaseModel
+
+
+class _CountTokensRequest(_BaseModel):
+    text: str = ""
+
+
+class _CountTokensResponse(_BaseModel):
+    token_count: int
+    estimated_cost_usd: float
+    output_tokens_estimate: int
+
+
+@router.post("/count-tokens", response_model=_CountTokensResponse)
+def count_tokens_endpoint(
+    body: _CountTokensRequest,
+    current_user: User = Depends(get_current_user),
+):
+    tokens = count_tokens(body.text)
+    return _CountTokensResponse(
+        token_count=tokens,
+        estimated_cost_usd=estimate_cost_usd(tokens),
+        output_tokens_estimate=DEFAULT_OUTPUT_TOKENS_ESTIMATE,
+    )

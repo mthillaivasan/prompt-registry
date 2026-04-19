@@ -73,6 +73,8 @@ def create_prompt(
     db.add(prompt)
     db.flush()  # populate prompt_id
 
+    from services.pricing import count_tokens, estimate_cost_usd
+    _tokens = count_tokens(body.prompt_text)
     version = PromptVersion(
         prompt_id=prompt.prompt_id,
         version_number=1,
@@ -81,6 +83,8 @@ def create_prompt(
         change_summary=body.change_summary,
         created_by=current_user.user_id,
         is_active=False,
+        token_count=_tokens,
+        estimated_cost_usd=f"{estimate_cost_usd(_tokens):.4f}",
     )
     db.add(version)
     db.flush()

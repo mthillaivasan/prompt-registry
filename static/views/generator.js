@@ -64,7 +64,8 @@ viewInits.generator = function () {
           <button class="btn btn-gold" id="gen-ai-btn" onclick="genAI()" style="padding:14px 0;font-size:16px;width:100%;justify-content:center">Generate with AI</button>
           <p id="gen-ai-hint" style="margin-top:8px;font-size:13px;color:var(--text2);text-align:center"></p>
         </div>
-        <textarea id="gen-text" rows="10" placeholder="Click Generate with AI above, or write the prompt text manually..."></textarea>
+        <textarea id="gen-text" rows="10" placeholder="Click Generate with AI above, or write the prompt text manually..." oninput="window._genOnTextInput()"></textarea>
+        <div id="gen-cost-line" style="margin-top:6px;font-size:12px;color:var(--text2);min-height:18px"></div>
       </div>
       <div class="form-group"><label>Change Summary (optional)</label>
         <input type="text" id="gen-summary" placeholder="e.g. Initial version">
@@ -231,6 +232,7 @@ async function genAI() {
     textarea.style.borderLeft = '3px solid var(--teal)';
     _genAICompleted = true;
     updateSaveState();
+    window._genRefreshCost();
     if (hint) hint.textContent = 'Generated — review the text below and edit if needed, then click Create Prompt.';
     hint.style.color = 'var(--green)';
     toast('Prompt generated — review and edit before saving');
@@ -241,3 +243,41 @@ async function genAI() {
     btn.disabled = false; btn.textContent = 'Generate with AI';
   }
 }
+
+// ── Token count + cost display (Drop 1) ──────────────────────────────────────
+// Post-Generate render, and debounced live update on every textarea edit.
+// Displays "~4,287 tokens · ~$0.02 per invocation (input only, estimated)"
+// under the textarea, with an inline "recalculating…" state during the fetch.
+
+let _genCostDebounce = null;
+let _genCostSeq = 0;
+
+function _formatCostLine(tokens, cost, outputEstimate) {
+  const tokenStr = tokens.toLocaleString();
+  const costStr = cost < 0.01 ? '<$0.01' : '~$' + cost.toFixed(2);
+  return '~' + tokenStr + ' tokens · ' + costStr +
+    ' per invocation (input only, ~' + outputEstimate + '-token output estimated)';
+}
+
+window._genRefreshCost = async function () {
+  const textarea = document.getElementById('gen-text');
+  const line = document.getElementById('gen-cost-line');
+  if (!textarea || !line) return;
+  const text = textarea.value || '';
+  if (!text.trim()) { line.textContent = ''; return; }
+  const seq = ++_genCostSeq;
+  line.innerHTML = '<span class="spinner" style="width:10px;height:10px;vertical-align:middle"></span> recalculating…';
+  try {
+    const resp = await api('/prompts/count-tokens', { method: 'POST', body: { text } });
+    if (seq !== _genCostSeq) return; // a newer call superseded this one
+    line.textContent = _formatCostLine(resp.token_count, resp.estimated_cost_usd, resp.output_tokens_estimate);
+  } catch (e) {
+    if (seq !== _genCostSeq) return;
+    line.textContent = 'Could not compute cost: ' + ((e && e.message) || 'unknown error');
+  }
+};
+
+window._genOnTextInput = function () {
+  if (_genCostDebounce) clearTimeout(_genCostDebounce);
+  _genCostDebounce = setTimeout(window._genRefreshCost, 500);
+};

@@ -202,6 +202,8 @@ CREATE TABLE prompt_versions (
     cache_valid            BOOLEAN NOT NULL DEFAULT TRUE,
     upgrade_proposal_id    TEXT,
     injection_scan_result  TEXT,
+    token_count            INTEGER,
+    estimated_cost_usd     TEXT,
     created_by             TEXT NOT NULL REFERENCES users(user_id),
     created_at             TEXT NOT NULL,
     approved_by            TEXT REFERENCES users(user_id),
