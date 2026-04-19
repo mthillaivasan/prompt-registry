@@ -5,8 +5,11 @@
   let step = 1;
   let validationError = '';
   let validationResult = null;
-  let tier3Count = 0; // question counter per step
+  let tier3Count = 0; // question counter per step (still incremented; no longer caps — see PHASE2 §5)
   let tier3Selected = new Set(); // multi-select picks for current Tier-3 question
+  let validating = false; // Step 1 auto-revalidate in flight
+  let validationSeq = 0; // monotonic counter; responses with stale seq are discarded
+  let debounceHandle = null; // timer id for textarea-debounced re-validate
   let briefScore = null; // { score, label, weakest_dimension, improvement_tip, dimensions }
   let restructuredBrief = null; // restructured text from Claude
   let restructuredTitle = null; // Claude-generated title; user may edit at review step
@@ -37,6 +40,8 @@
     state.constraints = []; state.selectedGuardrails = [];
     state.clientName = ''; state.ownerName = ''; state.ownerRole = ''; state.skipped = [];
     validationResult = null; tier3Count = 0; tier3Selected.clear(); briefScore = null; restructuredBrief = null; restructuredTitle = null; useRestructured = true;
+    validating = false; validationSeq = 0;
+    if (debounceHandle) { clearTimeout(debounceHandle); debounceHandle = null; }
     window._briefConversation = []; window._briefQuestionCount = {};
     guardrailData = null; briefId = null;
 
@@ -191,23 +196,27 @@
       if (validationError && !isValid) {
         html += `<p style="color:var(--amber);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
       }
-      // Tier 2 — suggestion card
+      // Tier 1 — brief accepted, user may still keep editing or click Next stage
+      if (validationResult && validationResult.tier === 1) {
+        html += `<div style="background:var(--surface2);border-left:3px solid var(--green);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
+          <div style="font-size:13px;color:var(--green);margin-bottom:4px;font-weight:600">Brief looks good</div>
+          <p style="font-size:14px;color:var(--text);margin:0">Ready for Step 2. Click Next stage when you're ready, or keep editing if you have more to add.</p>
+        </div>`;
+      }
+      // Tier 2 — suggestion card (primary accepts + re-validates; secondary dismisses + re-validates)
       if (validationResult && validationResult.tier === 2) {
         html += `<div style="background:var(--surface2);border-left:3px solid var(--accent);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
           <div style="font-size:13px;color:var(--accent);margin-bottom:6px;font-weight:600">One suggestion</div>
           <p style="font-size:14px;color:var(--text);margin:0 0 10px">${esc(validationResult.suggestion || '')}</p>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-gold btn-sm" onclick="window._briefUseSuggestion()">Use this addition</button>
-            <button class="btn btn-outline btn-sm" onclick="window._briefSkipSuggestion()">Continue as is</button>
+            <button class="btn btn-gold btn-sm" onclick="window._briefUseSuggestion()">Use this suggestion</button>
+            <button class="btn btn-outline btn-sm" onclick="window._briefDismissProbe()">Ignore this line of thought</button>
           </div>
         </div>`;
       }
-      // Tier 3 — question with options
+      // Tier 3 — question card (primary submits + re-validates; secondary dismisses + re-validates)
       if (validationResult && validationResult.tier === 3) {
-        const qCount = window._briefQuestionCount[step] || 0;
-        const counterText = qCount <= 1 ? 'Question ' + qCount + ' of 2 on this topic — then we move on.' : 'Last question on this — then we move on.';
         html += `<div style="background:var(--surface2);border-left:3px solid var(--amber);padding:14px 16px;border-radius:0 6px 6px 0;margin-top:8px">
-          <div style="font-size:12px;color:var(--amber);margin-bottom:6px;font-family:var(--font-mono)">${counterText}</div>
           <div style="font-size:15px;color:var(--text);margin-bottom:10px;font-family:var(--font-heading)">${esc(validationResult.question || 'Help me understand this better')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">`;
         (validationResult.options || []).forEach(opt => {
@@ -215,15 +224,13 @@
           const cls = sel ? 'btn btn-gold btn-sm' : 'btn btn-outline btn-sm';
           html += `<button class="${cls}" onclick="window._briefToggleOption('${esc(opt)}')">${sel ? '&#10003; ' : ''}${esc(opt)}</button>`;
         });
-        html += `<button class="btn btn-outline btn-sm" style="color:var(--text2);border-color:var(--border)" onclick="window._briefSkipQuestion()">Not applicable</button>`;
         html += `</div>
           <div style="display:flex;gap:8px;margin-bottom:10px">
             <input type="text" id="brief-tier3-free" style="flex:1" placeholder="${esc(validationResult.free_text_placeholder || 'Or type your answer...')}" onkeydown="if(event.key==='Enter'){event.preventDefault();window._briefSubmit();}">
-            <button class="btn btn-gold btn-sm" onclick="window._briefSubmit()">Continue</button>
           </div>
-          <div style="display:flex;gap:16px">
-            <a style="font-size:12px;color:var(--text2);cursor:pointer" onclick="window._briefSkipQuestion()">Skip this question</a>
-            <a style="font-size:12px;color:var(--text2);cursor:pointer" onclick="window._briefAbandonTrack()">Back to main topic</a>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-gold btn-sm" onclick="window._briefSubmit()">Submit answer</button>
+            <button class="btn btn-outline btn-sm" onclick="window._briefDismissProbe()">Ignore this line of thought</button>
           </div>
         </div>`;
       }
@@ -293,7 +300,11 @@
       const canSkip = step >= 2 && step <= 5;
       const disabledStyle = valid ? '' : (canSkip ? '' : 'opacity:0.4;cursor:not-allowed;pointer-events:none');
       html += '<div style="display:flex;align-items:center;gap:16px">';
-      html += `<button class="btn btn-gold" id="brief-next-btn" style="padding:12px 0;width:${step > 1 ? '120px' : '100%'};justify-content:center;font-size:15px;${disabledStyle}" onclick="window._briefNext()">Next</button>`;
+      const nextLabel = step === 1 ? 'Next stage' : 'Next';
+      html += `<button class="btn btn-gold" id="brief-next-btn" style="padding:12px 0;width:${step > 1 ? '120px' : '100%'};justify-content:center;font-size:15px;${disabledStyle}" onclick="window._briefNext()">${nextLabel}</button>`;
+      if (step === 1 && validating) {
+        html += `<span style="font-size:12px;color:var(--text2)">Checking brief…</span>`;
+      }
       if (canSkip) {
         html += `<a style="font-size:13px;color:var(--text2);cursor:pointer" onclick="window._briefSkipStep()">Skip for now</a>`;
       }
@@ -565,13 +576,19 @@
   window._briefPurposeInput = function (val) {
     state.purpose = val;
     validationError = '';
-    validationResult = null;
     if (val.length > 0) window._briefHasContent = true;
     localStorage.setItem('brief_step_1_draft', val);
+    // Stale result: clear the old card while user is editing so it can't be acted on.
+    if (validationResult) { validationResult = null; renderStep(); }
     const btn = document.getElementById('brief-next-btn');
     if (btn) {
       if (val.length >= 20) { btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.style.pointerEvents = 'auto'; }
       else { btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; btn.style.pointerEvents = 'none'; }
+    }
+    // Debounced auto re-validate. Cancels any pending call; only fires when ≥ 20 chars.
+    if (debounceHandle) clearTimeout(debounceHandle);
+    if (val.length >= 20) {
+      debounceHandle = setTimeout(() => { debounceHandle = null; _briefRevalidate(); }, 800);
     }
   };
   window._briefUseSuggestion = function () {
@@ -579,7 +596,22 @@
       state.purpose = state.purpose.trim() + ' ' + validationResult.suggested_addition;
     }
     validationResult = null; validationError = '';
-    step++; renderStep();
+    _briefRevalidate();
+  };
+  // Dismiss the current probe and re-validate. Records a coaching entry with
+  // skipped=false so validate_brief's filter forwards it to Claude — the
+  // dismissal text IS the answer. System-prompt rule "DO NOT re-ask anything
+  // in PRIOR COACHING" then prevents repetition. See PHASE2 §5.
+  window._briefDismissProbe = function () {
+    const q = validationResult ? (validationResult.question || validationResult.suggestion || '') : '';
+    if (q) {
+      window._briefConversation.push({
+        role: 'system', step, question: q,
+        answer: '(user dismissed this line of thought)', skipped: false,
+      });
+    }
+    validationResult = null; validationError = ''; tier3Selected.clear();
+    _briefRevalidate();
   };
   window._briefSkipSuggestion = function () {
     window._briefConversation.push({ role: 'system', step, question: validationResult ? validationResult.suggestion : '', answer: 'skipped', skipped: true });
@@ -625,43 +657,51 @@
     state.purpose = state.purpose.trim() + ' — ' + answer;
     tier3Selected.clear();
     validationResult = null; validationError = '';
-    renderStep();
-    window._briefNext();
+    _briefRevalidate();
   };
   window._briefPrev = function () { saveStepState(); validationError = ''; validationResult = null; tier3Count = 0; tier3Selected.clear(); step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
+
+  // Step 1 auto re-validate loop. No step advancement — caller decides when
+  // to move on via the Next stage button. Stale-response guard: seq captured
+  // before the await; if seq changes while awaiting (user kept typing /
+  // clicked another action), the response is dropped on arrival.
+  async function _briefRevalidate() {
+    if (step !== 1) return;
+    if ((state.purpose || '').length < 20) {
+      validationResult = null; validating = false;
+      renderStep();
+      return;
+    }
+    validationSeq += 1;
+    const mySeq = validationSeq;
+    validating = true;
+    renderStep();
+    try {
+      const resp = await api('/prompts/validate-brief', { method: 'POST', body: { description: state.purpose, conversation_history: window._briefConversation } });
+      if (mySeq !== validationSeq) return;
+      validationResult = resp;
+      if (resp.tier === 1) {
+        window._briefConversation.push({ role: 'system', step, question: 'validation', answer: 'accepted', skipped: false });
+      } else if (resp.tier === 3) {
+        window._briefQuestionCount[step] = (window._briefQuestionCount[step] || 0) + 1;
+        tier3Count = window._briefQuestionCount[step];
+      }
+    } catch (e) {
+      if (mySeq !== validationSeq) return;
+      console.warn('[Brief] Validation failed:', e.message);
+      validationResult = null;
+    } finally {
+      if (mySeq === validationSeq) {
+        validating = false;
+        renderStep();
+      }
+    }
+  }
+
   window._briefNext = async function () {
     saveStepState();
     if (!isStepValid()) { validationError = getValidationHint(); renderStep(); return; }
-
-    if (step === 1) {
-      const btn = document.getElementById('brief-next-btn');
-      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Checking...'; }
-      console.log('[Brief] Step 1 Next clicked, purpose:', state.purpose.substring(0, 50));
-      try {
-        const resp = await api('/prompts/validate-brief', { method: 'POST', body: { description: state.purpose, conversation_history: window._briefConversation } });
-        console.log('[Brief] Validation response:', JSON.stringify(resp));
-        validationResult = resp;
-        if (resp.tier === 1) {
-          console.log('[Brief] Tier 1 — accepted, proceeding');
-          window._briefConversation.push({ role: 'system', step, question: 'validation', answer: 'accepted', skipped: false });
-        } else if (resp.tier === 2) {
-          console.log('[Brief] Tier 2 — showing suggestion:', resp.suggestion);
-          renderStep(); return;
-        } else {
-          window._briefQuestionCount[step] = (window._briefQuestionCount[step] || 0) + 1;
-          tier3Count = window._briefQuestionCount[step];
-          console.log('[Brief] Tier 3 — question count:', tier3Count, 'question:', resp.question);
-          if (tier3Count > 2) {
-            console.log('[Brief] Max questions reached, auto-accepting');
-            validationResult = null;
-          } else {
-            renderStep(); return;
-          }
-        }
-      } catch (e) {
-        console.warn('[Brief] Validation failed, proceeding:', e.message);
-      }
-    }
+    if (debounceHandle) { clearTimeout(debounceHandle); debounceHandle = null; }
 
     validationError = ''; validationResult = null; tier3Count = 0; tier3Selected.clear();
     step++;
