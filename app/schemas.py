@@ -164,6 +164,7 @@ class BriefCreate(BaseModel):
 
 
 class BriefUpdate(BaseModel):
+    title: str | None = None
     step_progress: int | None = None
     step_answers: dict | None = None
     selected_guardrails: list[str] | None = None
@@ -178,6 +179,7 @@ class BriefOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     brief_id: str
+    title: str | None
     status: str
     quality_score: int
     step_progress: int

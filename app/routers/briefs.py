@@ -89,6 +89,8 @@ def update_brief(
     if brief.status in ("Complete", "Archived"):
         raise HTTPException(status_code=409, detail="Brief is finalised")
 
+    if body.title is not None:
+        brief.title = body.title
     if body.step_progress is not None:
         brief.step_progress = body.step_progress
     if body.step_answers is not None:
@@ -133,6 +135,8 @@ def save_step(
     if brief.status not in ("In Progress",):
         raise HTTPException(status_code=409, detail="Brief is finalised")
 
+    if body.title is not None:
+        brief.title = body.title
     if body.step_answers is not None:
         existing = json.loads(brief.step_answers or "{}")
         existing.update(body.step_answers)

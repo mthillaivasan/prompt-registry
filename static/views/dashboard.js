@@ -43,7 +43,7 @@ function renderDashContent(prompts, briefs) {
     briefs.forEach(b => {
       const answers = JSON.parse(b.step_answers || '{}');
       const purpose = answers.purpose || '';
-      const title = purpose ? purpose.substring(0, 50) : (b.client_name || 'Untitled brief');
+      const title = b.title || (purpose ? purpose.substring(0, 50) : (b.client_name || 'Untitled brief'));
       const qualityColor = b.quality_score >= 70 ? 'var(--green)' : b.quality_score >= 40 ? 'var(--amber)' : 'var(--red)';
       const qualityLabel = b.quality_score >= 80 ? 'Gold standard' : b.quality_score >= 60 ? 'Strong' : b.quality_score >= 40 ? 'Reasonable' : 'Weak';
       const dots = Array.from({length: 6}, (_, i) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${i < b.step_progress ? 'var(--accent)' : 'var(--border)'}"></span>`).join('');

@@ -8,6 +8,7 @@
   let tier3Count = 0; // question counter per step
   let briefScore = null; // { score, label, weakest_dimension, improvement_tip, dimensions }
   let restructuredBrief = null; // restructured text from Claude
+  let restructuredTitle = null; // Claude-generated title; user may edit at review step
   let useRestructured = true;
   const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [],
     clientName: '', ownerName: '', ownerRole: '', skipped: [] };
@@ -34,7 +35,7 @@
     state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
     state.constraints = []; state.selectedGuardrails = [];
     state.clientName = ''; state.ownerName = ''; state.ownerRole = ''; state.skipped = [];
-    validationResult = null; tier3Count = 0; briefScore = null; restructuredBrief = null; useRestructured = true;
+    validationResult = null; tier3Count = 0; briefScore = null; restructuredBrief = null; restructuredTitle = null; useRestructured = true;
     window._briefConversation = []; window._briefQuestionCount = {};
     guardrailData = null; briefId = null;
 
@@ -52,7 +53,7 @@
             const nSkipped = bSkipped.length;
             let resumeHtml = `<div class="card" style="max-width:500px;margin:60px auto;text-align:center">
               <h3 style="margin-bottom:12px">You have an unfinished brief</h3>
-              <p style="color:var(--text2);margin-bottom:8px">${esc(b.client_name || 'Untitled')} — Step ${b.step_progress}/6</p>`;
+              <p style="color:var(--text2);margin-bottom:8px">${esc(b.title || b.client_name || 'Untitled')} — Step ${b.step_progress}/6</p>`;
             if (nSkipped > 0) {
               resumeHtml += `<p style="color:var(--amber);font-size:13px;margin-bottom:8px">You have ${nSkipped} skipped step${nSkipped > 1 ? 's' : ''}. Complete them for a stronger brief.</p>`;
             }
@@ -443,11 +444,20 @@
 
     // Restructured brief
     if (restructuredBrief) {
+      html += `<div class="card">
+        <div class="card-title" style="margin-bottom:8px">Title</div>
+        <input type="text" id="brief-title-input" maxlength="120"
+               value="${esc(restructuredTitle || '')}"
+               placeholder="e.g. Summarise FINMA obligations from prospectus"
+               oninput="window._briefTitleInput(this.value)"
+               style="width:100%">
+      </div>`;
       const selRestructured = useRestructured ? 'border-color:var(--accent)' : 'border-color:var(--border);opacity:.7';
       const selOriginal = !useRestructured ? 'border-color:var(--accent)' : 'border-color:var(--border);opacity:.7';
       html += `<div class="card" style="${selRestructured}">
         <div class="card-title" style="margin-bottom:8px;color:var(--accent)">Restructured brief — recommended</div>
-        <div class="prompt-text">${esc(restructuredBrief)}</div>
+        <textarea id="brief-restructured-input" rows="6" style="width:100%"
+                  oninput="window._briefRestructuredInput(this.value)">${esc(restructuredBrief)}</textarea>
         <button class="btn btn-gold btn-sm" style="margin-top:10px" onclick="window._briefSelectVersion(true)">
           ${useRestructured ? '&#10003; Selected' : 'Use restructured brief'}
         </button>
@@ -482,6 +492,8 @@
     useRestructured = useRestr;
     renderReview();
   };
+  window._briefTitleInput = function (val) { restructuredTitle = val; };
+  window._briefRestructuredInput = function (val) { restructuredBrief = val; };
 
   // Server persistence
   async function saveBriefToServer() {
@@ -674,7 +686,8 @@
     try {
       const resp = await api('/prompts/briefs/restructure', { method: 'POST', body: { brief_text: buildBriefText() } });
       restructuredBrief = resp.restructured;
-    } catch (e) { restructuredBrief = null; }
+      restructuredTitle = resp.title || null;
+    } catch (e) { restructuredBrief = null; restructuredTitle = null; }
   }
 
   window._briefCopy = function () {
@@ -686,11 +699,17 @@
     });
   };
 
-  window._briefSend = function () {
+  window._briefSend = async function () {
     window._inBrief = false;
     window._briefHasContent = false;
     const guardrails = [...state.selectedGuardrails];
     if (briefId) {
+      try {
+        await api('/briefs/' + briefId, { method: 'PATCH', body: {
+          title: restructuredTitle || null,
+          restructured_brief: restructuredBrief || null,
+        }});
+      } catch (e) { console.warn('Brief title save failed:', e.message); }
       api('/briefs/' + briefId + '/complete', { method: 'POST' }).catch(() => {});
     }
     localStorage.removeItem('pr_active_brief');
@@ -702,7 +721,7 @@
       const output = document.getElementById('gen-output');
       const textarea = document.getElementById('gen-text');
 
-      if (title && !title.value) title.value = state.purpose.substring(0, 80);
+      if (title && !title.value) title.value = restructuredTitle || state.purpose.substring(0, 80);
 
       const typeMap = {
         'Structured assessment': 'Analysis',

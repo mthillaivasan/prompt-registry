@@ -90,6 +90,10 @@ Priority: reconsider before continuing with P3 (three-tier coaching) and P4 (qua
 
 The "one concept per step" principle applies beyond the Brief Builder. Audit other user-facing forms for places that ask about multiple things at once — those are places where output quality is likely degrading.
 
+### State loss on Back/Review navigation
+
+Brief Builder state loss on Back/Review navigation: if the user edits the title or restructured text at the review step, then clicks Back to editing, then returns to review, loadRestructuredBrief() re-runs and overwrites their edit. Pre-existing behaviour extended to the title field in Slot T1. Fix by preserving user-edited state across Back/forward navigation — probably a 'has been edited' flag on each field plus conditional re-fetch. Estimate: 30-45 min. Not urgent.
+
 ---
 
 ## Learning layer from completed prompts
