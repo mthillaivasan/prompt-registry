@@ -10,6 +10,12 @@
 
 **SHIP HAIKU.** State agreement 92% meets the ≥90% threshold, no red↔green disagreements.
 
+## Caveat on sample size
+
+Sample size (12 paired calls) is minimal. Re-run at scale once production traffic is available. Monitor Haiku quality via smoke tests; revert to Sonnet via ANTHROPIC_MODEL env override if coaching quality degrades.
+
+The single disagreement on record (Brief B · `topic_7_field_format`) went green→amber with Haiku being stricter than Sonnet — the safer direction of drift for a coaching tool. The opposite direction (Haiku false-green where Sonnet said amber/red) would silently let gaps through and is the case to watch for in production.
+
 ## Paired calls
 
 ### A — early stage · `topic_1_prompt_type`
