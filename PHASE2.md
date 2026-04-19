@@ -216,3 +216,41 @@ Migrated so far:
 ## Smoke-test insight from 19 April
 
 The generator currently has two parallel guardrail-content systems: DB-driven (scoring_dimensions rows rendered into the prompt via guardrail_block in generation.py) and code-driven (REGULATORY_COMPONENTS dict in prompt_components.py rendered via assemble_template). Both produce text about the same dimensions, creating duplication and occasional contradiction in the generated prompt. This was a root cause of the "governance-flavoured output" observation from 18 April smoke testing. The dimension migration pattern above resolves this per-dimension as each is migrated.
+
+## Next session priorities (after 19 April)
+
+### 1. Focus on generating good quality briefs
+The Brief Builder produces acceptable briefs today but quality is inconsistent — output depends heavily on how specifically the user phrases things and which coaching question options they pick. Needs:
+- Multi-select support on coaching questions (single-select is a real limitation surfaced in 19 April smoke testing — user wanted 3 of 6 options for "what cut-off time information")
+- Revisit how Claude's coaching prompt consumes multi-select answers
+- Consider whether the coaching threshold ("when is the brief good enough") should become configurable rather than hardcoded
+
+Estimate: 60-90 min for multi-select alone; add 30-45 min if quality threshold work is included.
+
+### 2. Page/section references in extracted outputs
+Any prompt whose input is a document (prospectus, policy, circular, report) should produce outputs that cite the source page or section for each extracted data point. Example: "Subscription cut-off: 14:00 CET (prospectus page 23, 'Dealing Procedures' section)."
+
+This is load-bearing for regulated-finance audit: a reviewer needs to trace every AI-extracted claim back to source. Already flagged as a design principle in an earlier PHASE2 section (page references as default component) — next session should implement it as a component that's auto-attached when input_type is a document.
+
+Implementation: new prompt_component "OUTPUT_PAGE_CITATIONS" with plain-English instruction text, auto-selected in assemble_template when input_type matches document-like values ("PDF", "document", "prospectus", "report", "circular", "policy").
+
+Estimate: 60-90 min including testing.
+
+### 3. Token cost display on generated prompts
+Every generated prompt should display its estimated run cost per invocation and projected annual cost at typical usage. Pre-empts the "is this getting too expensive" objection before it's asked — by showing concretely that governance-enhanced prompts cost pennies, not pounds.
+
+Display format: "Estimated cost per invocation: $X.XX | Annual cost at 1/day: $YYY.YY | Annual cost at 1/hour: $ZZZ.ZZ"
+
+Needs: token-counting logic (use tiktoken or similar for input estimation + max_tokens for output ceiling), current Claude Sonnet pricing as a configuration value, admin-settable usage assumption defaults.
+
+Estimate: 90-120 min realistic including the admin setting plumbing.
+
+### 4. Continued dimension migration (blocked on Session B)
+
+16 scoring dimensions still render via the old code-labelled format (REG_D1, REG_D3-6, OWASP_LLM02, OWASP_LLM06-09, NIST_GOVERN_1, NIST_MAP_1, NIST_MEASURE_1, NIST_MANAGE_1, ISO42001_6_1, ISO42001_8_4). Infrastructure to migrate them is fully in place (schema, variable resolver, generator fallback, idempotent sync pattern).
+
+Remaining work: author plain-English instructional_text for each. Approx 10-15 min per dimension = 3-4 hours total authoring time, best done in small chunks over several sessions rather than all at once.
+
+Blocked on Session B (admin/dimensions page). Without the admin page, each migration is a code-commit-push-deploy cycle, which is heavyweight for content work. With the admin page, each migration is a UI edit — 10 min end to end.
+
+Suggested sequence: Session B first, then bulk dimension authoring, then the three priorities above (multi-select, page citations, cost display).
