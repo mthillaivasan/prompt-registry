@@ -7,9 +7,8 @@
   let validationResult = null;
   let tier3Count = 0; // question counter per step (still incremented; no longer caps — see PHASE2 §5)
   let tier3Selected = new Set(); // multi-select picks for current Tier-3 question
-  let validating = false; // Step 1 auto-revalidate in flight
+  let validating = false; // Step 1 re-validate in flight
   let validationSeq = 0; // monotonic counter; responses with stale seq are discarded
-  let debounceHandle = null; // timer id for textarea-debounced re-validate
   let briefScore = null; // { score, label, weakest_dimension, improvement_tip, dimensions }
   let restructuredBrief = null; // restructured text from Claude
   let restructuredTitle = null; // Claude-generated title; user may edit at review step
@@ -41,7 +40,6 @@
     state.clientName = ''; state.ownerName = ''; state.ownerRole = ''; state.skipped = [];
     validationResult = null; tier3Count = 0; tier3Selected.clear(); briefScore = null; restructuredBrief = null; restructuredTitle = null; useRestructured = true;
     validating = false; validationSeq = 0;
-    if (debounceHandle) { clearTimeout(debounceHandle); debounceHandle = null; }
     window._briefConversation = []; window._briefQuestionCount = {};
     guardrailData = null; briefId = null;
 
@@ -195,6 +193,34 @@
         </div>`;
       if (validationError && !isValid) {
         html += `<p style="color:var(--amber);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
+      }
+      // Review button — on-demand re-validate. Three states:
+      //  no result  + ≥200  → primary gold "Review brief"
+      //  no result  + <200  → primary, disabled
+      //  tier 2/3           → neutral outline "Re-review" (always enabled if ≥200)
+      //  tier 1             → disabled neutral "Brief passes"
+      {
+        const len = (state.purpose || '').length;
+        const canReview = len >= 200;
+        const tier = validationResult && validationResult.tier;
+        let reviewCls, reviewLabel, reviewDisabled;
+        if (tier === 1) {
+          reviewCls = 'btn btn-outline btn-sm';
+          reviewLabel = 'Brief passes';
+          reviewDisabled = true;
+        } else if (tier === 2 || tier === 3) {
+          reviewCls = 'btn btn-outline btn-sm';
+          reviewLabel = 'Re-review';
+          reviewDisabled = !canReview;
+        } else {
+          reviewCls = 'btn btn-gold btn-sm';
+          reviewLabel = 'Review brief';
+          reviewDisabled = !canReview;
+        }
+        const reviewDisabledStyle = reviewDisabled ? 'opacity:0.4;cursor:not-allowed;pointer-events:none' : 'opacity:1;cursor:pointer';
+        html += `<div style="margin-top:8px">
+          <button class="${reviewCls}" id="brief-review-btn" style="${reviewDisabledStyle}" onclick="window._briefRevalidate()">${reviewLabel}</button>
+        </div>`;
       }
       // Tier 1 — brief accepted, user may still keep editing or click Next stage
       if (validationResult && validationResult.tier === 1) {
@@ -579,16 +605,17 @@
     if (val.length > 0) window._briefHasContent = true;
     localStorage.setItem('brief_step_1_draft', val);
     // Stale result: clear the old card while user is editing so it can't be acted on.
-    if (validationResult) { validationResult = null; renderStep(); }
+    // Re-render so the Review button's state (primary/disabled/neutral) updates too.
+    if (validationResult) { validationResult = null; renderStep(); return; }
     const btn = document.getElementById('brief-next-btn');
     if (btn) {
       if (val.length >= 20) { btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.style.pointerEvents = 'auto'; }
       else { btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; btn.style.pointerEvents = 'none'; }
     }
-    // Debounced auto re-validate. Cancels any pending call; only fires when ≥ 20 chars.
-    if (debounceHandle) clearTimeout(debounceHandle);
-    if (val.length >= 20) {
-      debounceHandle = setTimeout(() => { debounceHandle = null; _briefRevalidate(); }, 800);
+    const reviewBtn = document.getElementById('brief-review-btn');
+    if (reviewBtn) {
+      if (val.length >= 200) { reviewBtn.style.opacity = '1'; reviewBtn.style.cursor = 'pointer'; reviewBtn.style.pointerEvents = 'auto'; }
+      else { reviewBtn.style.opacity = '0.4'; reviewBtn.style.cursor = 'not-allowed'; reviewBtn.style.pointerEvents = 'none'; }
     }
   };
   window._briefUseSuggestion = function () {
@@ -697,11 +724,11 @@
       }
     }
   }
+  window._briefRevalidate = _briefRevalidate;
 
   window._briefNext = async function () {
     saveStepState();
     if (!isStepValid()) { validationError = getValidationHint(); renderStep(); return; }
-    if (debounceHandle) { clearTimeout(debounceHandle); debounceHandle = null; }
 
     validationError = ''; validationResult = null; tier3Count = 0; tier3Selected.clear();
     step++;
