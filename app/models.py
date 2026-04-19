@@ -65,6 +65,9 @@ class ScoringDimension(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     tier = Column(Integer, nullable=False, default=3)  # 1=always, 2=conditional, 3=optional
     tier2_trigger = Column(Text, nullable=True)  # JSON: condition description for tier 2
+    instructional_text = Column(Text, nullable=True)
+    updated_at = Column(String, nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.user_id"), nullable=True)
 
     __table_args__ = (
         CheckConstraint(

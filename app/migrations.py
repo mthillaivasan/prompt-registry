@@ -20,6 +20,9 @@ def run_migrations(engine) -> None:
     with engine.connect() as conn:
         _add_column(conn, "scoring_dimensions", "tier", "INTEGER NOT NULL DEFAULT 3", is_sqlite)
         _add_column(conn, "scoring_dimensions", "tier2_trigger", "TEXT", is_sqlite)
+        _add_column(conn, "scoring_dimensions", "instructional_text", "TEXT", is_sqlite)
+        _add_column(conn, "scoring_dimensions", "updated_at", "VARCHAR", is_sqlite)
+        _add_column(conn, "scoring_dimensions", "updated_by", "VARCHAR(36)", is_sqlite)
 
         _create_table_if_not_exists(conn, "briefs", """
             brief_id VARCHAR(36) PRIMARY KEY,

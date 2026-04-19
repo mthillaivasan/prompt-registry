@@ -171,3 +171,7 @@ Scope: seeded example library (~30 examples to start, curated by hand), semantic
 Priority: after Brief Builder flow redesign ships. Complementary feature, not competing priority.
 
 Open question: who owns curating the seeded example library? Charlie Hainsworth at EY is a plausible collaborator given his Tax Technology and Transformation remit. Regulatory example harvesting is half-day of research.
+
+## Future optimisations
+
+Cache invalidation trigger fn_invalidate_cache_on_dimension_update fires on every column update to scoring_dimensions, including columns that don't affect compliance scoring (instructional_text, updated_at, updated_by). Makes cache re-computation wasteful for display-only edits. Optimise by making the trigger conditional on specific columns (OLD.score_5_criteria != NEW.score_5_criteria OR OLD.is_active != NEW.is_active, etc.) once registry scale makes the waste noticeable. Not urgent.

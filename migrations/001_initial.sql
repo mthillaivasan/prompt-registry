@@ -5,7 +5,7 @@
 -- Run once against a clean Postgres database, or use the companion
 -- reconciliation script (scripts/verify_schema.py) to detect drift.
 --
--- Last synced with models.py: 2026-04-18
+-- Last synced with models.py: 2026-04-19
 
 -- ── Extensions ────────────────────────────────────────────────────────────────
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";  -- gen_random_uuid()
@@ -48,6 +48,9 @@ CREATE TABLE scoring_dimensions (
     sort_order          INTEGER NOT NULL DEFAULT 0,
     tier                INTEGER NOT NULL DEFAULT 3,
     tier2_trigger       TEXT,
+    instructional_text  TEXT,
+    updated_at          TEXT,
+    updated_by          TEXT REFERENCES users(user_id),
 
     CONSTRAINT ck_sd_framework
         CHECK (framework IN ('REGULATORY','OWASP','NIST','ISO42001')),
