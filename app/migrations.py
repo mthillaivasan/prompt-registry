@@ -26,6 +26,7 @@ def run_migrations(engine) -> None:
 
         _create_table_if_not_exists(conn, "briefs", """
             brief_id VARCHAR(36) PRIMARY KEY,
+            title VARCHAR,
             status VARCHAR NOT NULL DEFAULT 'In Progress',
             quality_score INTEGER NOT NULL DEFAULT 0,
             step_progress INTEGER NOT NULL DEFAULT 1,
@@ -42,6 +43,7 @@ def run_migrations(engine) -> None:
             submitted_at VARCHAR,
             resulting_prompt_id VARCHAR(36)
         """, is_sqlite)
+        _add_column(conn, "briefs", "title", "VARCHAR", is_sqlite)
 
         _create_table_if_not_exists(conn, "prompt_components", """
             component_id VARCHAR(36) PRIMARY KEY,

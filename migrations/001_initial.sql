@@ -238,6 +238,7 @@ CREATE TABLE audit_log (
 -- ── briefs ────────────────────────────────────────────────────────────────────
 CREATE TABLE briefs (
     brief_id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    title                 TEXT,
     status                TEXT NOT NULL DEFAULT 'In Progress',
     quality_score         INTEGER NOT NULL DEFAULT 0,
     step_progress         INTEGER NOT NULL DEFAULT 1,

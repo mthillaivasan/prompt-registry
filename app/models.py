@@ -333,6 +333,7 @@ class Brief(Base):
     __tablename__ = "briefs"
 
     brief_id = Column(String(36), primary_key=True, default=_uuid)
+    title = Column(String, nullable=True)
     status = Column(String, nullable=False, default="In Progress")
     quality_score = Column(Integer, nullable=False, default=0)
     step_progress = Column(Integer, nullable=False, default=1)
