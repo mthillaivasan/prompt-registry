@@ -69,8 +69,20 @@
     'Other': '',
   };
 
-  let topicState = {}; // { topic_id: { value, state: 'red'|'amber'|'green', updated_at } }
+  let topicState = {}; // { topic_id: { value, state: 'red'|'amber'|'green', updated_at, conversation_history?, probe? } }
   let expandedTopic = null; // id of the currently-expanded topic, or null
+
+  // B2: prose topics. All share state.purpose as their topic_answer; each has
+  // its own state pill and its own conversation_history scoped by topic_id.
+  const PROSE_TOPICS = [
+    { id: 'topic_6_data_points',             name: 'Data points to extract' },
+    { id: 'topic_7_field_format',            name: 'Per-field format / normalisation' },
+    { id: 'topic_8_null_handling',           name: 'Null / missing handling' },
+    { id: 'topic_9_confidence_traceability', name: 'Confidence and traceability' },
+    { id: 'topic_10_error_modes',            name: 'Error / exception modes' },
+  ];
+  // Per-topic ephemeral UI state for in-card multi-select questions.
+  const proseTopicPicks = {}; // topic_id -> Set of picked option strings
   const CONSTRAINT_OPTIONS = [
     'Must not admit liability',
     'Must flag uncertainty rather than guess',
@@ -89,6 +101,7 @@
     validationResult = null; tier3Count = 0; tier3Selected.clear(); briefScore = null; restructuredBrief = null; restructuredTitle = null; useRestructured = true;
     validating = false; validationSeq = 0;
     topicState = {}; expandedTopic = null;
+    for (const k in proseTopicPicks) delete proseTopicPicks[k];
     window._briefConversation = []; window._briefQuestionCount = {};
     guardrailData = null; briefId = null;
 
@@ -282,8 +295,7 @@
         html += `<p style="color:var(--amber);font-size:13px;margin-top:12px">${getValidationHint()}</p>`;
       }
     } else if (step === 2) {
-      // Step 2 — prose brief, scoped. Prose topic coaching (Review button, Tier cards)
-      // is out of scope for B1 — lands in B2.
+      // Step 2 — prose brief, scoped. Five topic-coaching cards below the textarea.
       const charCount = state.purpose.length;
       const isValid = charCount >= 20;
       html += `<h3 style="margin-bottom:8px">Describe the task</h3>
@@ -297,6 +309,7 @@
       if (validationError && !isValid) {
         html += `<p style="color:var(--amber);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
       }
+      html += _renderProseTopicCards();
     } else if (step === 3) {
       html += `<h3 style="margin-bottom:12px">Who receives the output?</h3>
         <p style="color:var(--text2);margin-bottom:12px;font-size:14px">Who will read or use the AI output?</p>
@@ -638,6 +651,195 @@
     renderStep();
     saveBriefToServer();
   };
+
+  // ── B2 prose topic coaching ────────────────────────────────────────────────
+
+  // Rubric-selection rule: if 'Extraction' is in the picked prompt types, use
+  // Extraction; else first picked; else null (caller handles gracefully).
+  function _selectedPromptTypeForRubric() {
+    const e = topicState.topic_1_prompt_type;
+    if (!e || !e.value) return null;
+    const arr = Array.isArray(e.value) ? e.value : [e.value];
+    if (!arr.length) return null;
+    if (arr.includes('Extraction')) return 'Extraction';
+    return arr[0];
+  }
+
+  // Build {topic_id: string} from picked topics 1-5+4b for sibling_answers.
+  // Multi-select topic 1 is comma-joined into a single string per the API shape.
+  function _buildSiblingAnswers() {
+    const out = {};
+    EXTRACTION_TOPICS.forEach(t => {
+      const entry = topicState[t.id];
+      if (!entry || !entry.value) return;
+      const v = Array.isArray(entry.value) ? entry.value.join(', ') : entry.value;
+      if (v) out[t.id] = v;
+    });
+    return out;
+  }
+
+  function _stateColour(s) {
+    if (s === 'green') return 'var(--green)';
+    if (s === 'amber') return 'var(--amber)';
+    if (s === 'red') return 'var(--red)';
+    return 'var(--text2)';
+  }
+
+  function _renderProseTopicCards() {
+    let html = '<div style="margin-top:20px">';
+    html += '<h4 style="font-size:14px;margin-bottom:10px;color:var(--text2);font-weight:600">Topic coaching</h4>';
+    PROSE_TOPICS.forEach(topic => {
+      const entry = topicState[topic.id] || {};
+      const probe = entry.probe;
+      const stateStr = entry.state || 'red';
+      const stateColour = _stateColour(stateStr);
+      const isValidating = entry._validating;
+      html += `<div class="card" style="margin-bottom:10px;padding:12px 14px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:${probe ? '10px' : '0'}">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${stateColour}"></span>
+          <span style="font-size:14px;font-weight:600;flex:1">${esc(topic.name)}</span>
+          <button class="btn btn-outline btn-sm" ${isValidating ? 'disabled' : ''} onclick="window._briefReviewTopic('${esc(topic.id)}')">${isValidating ? 'Checking…' : (probe ? 'Re-review' : 'Review')}</button>
+        </div>`;
+      if (probe && probe.suggestion) {
+        html += `<div style="background:var(--surface2);border-left:3px solid var(--accent);padding:10px 12px;border-radius:0 4px 4px 0">
+          <div style="font-size:13px;color:var(--accent);margin-bottom:4px;font-weight:600">Suggestion</div>
+          <p style="font-size:13px;margin:0 0 10px">${esc(probe.suggestion)}</p>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-gold btn-sm" onclick="window._briefUseTopicSuggestion('${esc(topic.id)}')">Use this suggestion</button>
+            <button class="btn btn-outline btn-sm" onclick="window._briefDismissTopicProbe('${esc(topic.id)}')">Ignore this line of thought</button>
+          </div>
+        </div>`;
+      } else if (probe && probe.question) {
+        const picks = proseTopicPicks[topic.id] || new Set();
+        html += `<div style="background:var(--surface2);border-left:3px solid var(--amber);padding:10px 12px;border-radius:0 4px 4px 0">
+          <div style="font-size:14px;margin-bottom:8px">${esc(probe.question)}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">`;
+        (probe.options || []).forEach(opt => {
+          const sel = picks.has(opt);
+          const cls = sel ? 'btn btn-gold btn-sm' : 'btn btn-outline btn-sm';
+          html += `<button class="${cls}" onclick="window._briefToggleTopicOption('${esc(topic.id)}','${esc(opt)}')">${sel ? '&#10003; ' : ''}${esc(opt)}</button>`;
+        });
+        html += `</div>
+          <input type="text" id="topic-free-${esc(topic.id)}" style="width:100%;margin-bottom:8px" placeholder="${esc(probe.free_text_placeholder || 'Or add in your own words…')}">
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-gold btn-sm" onclick="window._briefSubmitTopicAnswer('${esc(topic.id)}')">Submit answer</button>
+            <button class="btn btn-outline btn-sm" onclick="window._briefDismissTopicProbe('${esc(topic.id)}')">Ignore this line of thought</button>
+          </div>
+        </div>`;
+      } else if (entry.rubric_unavailable) {
+        html += `<div style="padding:8px 12px;color:var(--text2);font-size:13px;font-style:italic">Rubric not yet available for ${esc(entry.rubric_unavailable)}. Topic coaching for non-Extraction prompt types lands in a later phase.</div>`;
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  async function _callValidateTopic(topicId) {
+    const promptType = _selectedPromptTypeForRubric();
+    if (!promptType) {
+      topicState[topicId] = Object.assign({}, topicState[topicId], {
+        state: 'red', probe: null, rubric_unavailable: 'no prompt type picked',
+      });
+      renderStep();
+      return;
+    }
+    const entry = topicState[topicId] || {};
+    const history = (entry.conversation_history || []).map(e => Object.assign({}, e, { topic_id: topicId }));
+    topicState[topicId] = Object.assign({}, entry, { _validating: true });
+    renderStep();
+    try {
+      const resp = await api('/prompts/briefs/validate-topic', { method: 'POST', body: {
+        topic_id: topicId,
+        prompt_type: promptType,
+        topic_answer: state.purpose,
+        sibling_answers: _buildSiblingAnswers(),
+        conversation_history: history,
+      }});
+      const next = Object.assign({}, topicState[topicId], {
+        state: resp.state || 'red',
+        probe: (resp.suggestion || resp.question) ? resp : null,
+        rubric_unavailable: null,
+        _validating: false,
+        updated_at: new Date().toISOString(),
+        conversation_history: entry.conversation_history || [],
+      });
+      // Prose topics have no single 'value' — the shared state.purpose IS the answer.
+      if (next.value == null) next.value = '';
+      topicState[topicId] = next;
+      // Reset local option picks for a fresh question card
+      proseTopicPicks[topicId] = new Set();
+      renderStep();
+      saveBriefToServer();
+    } catch (e) {
+      // 501 → rubric not yet available for this prompt_type
+      const msg = (e && e.message) || '';
+      if (msg.includes('501') || msg.toLowerCase().includes('not yet available')) {
+        topicState[topicId] = Object.assign({}, topicState[topicId], {
+          _validating: false, probe: null,
+          rubric_unavailable: promptType,
+        });
+        renderStep();
+        return;
+      }
+      topicState[topicId] = Object.assign({}, topicState[topicId], { _validating: false });
+      renderStep();
+      toast('Topic validation failed: ' + msg, 'error');
+    }
+  }
+
+  function _appendConversationEntry(topicId, question, answer, skipped) {
+    const entry = topicState[topicId] || {};
+    const hist = (entry.conversation_history || []).slice();
+    hist.push({ question: question || '', answer: answer || '', skipped: !!skipped, topic_id: topicId });
+    topicState[topicId] = Object.assign({}, entry, { conversation_history: hist });
+  }
+
+  window._briefReviewTopic = function (topicId) {
+    _callValidateTopic(topicId);
+  };
+
+  window._briefUseTopicSuggestion = function (topicId) {
+    const probe = topicState[topicId] && topicState[topicId].probe;
+    if (!probe) return;
+    if (probe.suggested_addition) {
+      state.purpose = (state.purpose || '').trim() + ' ' + probe.suggested_addition;
+    }
+    _appendConversationEntry(topicId, probe.suggestion || '', probe.suggested_addition || '', false);
+    _callValidateTopic(topicId);
+  };
+
+  window._briefToggleTopicOption = function (topicId, opt) {
+    const set = proseTopicPicks[topicId] || new Set();
+    if (set.has(opt)) set.delete(opt); else set.add(opt);
+    proseTopicPicks[topicId] = set;
+    renderStep();
+  };
+
+  window._briefSubmitTopicAnswer = function (topicId) {
+    const probe = topicState[topicId] && topicState[topicId].probe;
+    if (!probe) return;
+    const picks = Array.from(proseTopicPicks[topicId] || []);
+    const freeEl = document.getElementById('topic-free-' + topicId);
+    const free = freeEl ? freeEl.value.trim() : '';
+    const parts = [];
+    if (picks.length) parts.push(picks.join(', '));
+    if (free) parts.push(free);
+    if (!parts.length) { toast('Pick one or more options or type an answer', 'error'); return; }
+    const answer = parts.join('. ') + '.';
+    state.purpose = (state.purpose || '').trim() + ' ' + answer;
+    _appendConversationEntry(topicId, probe.question || '', answer, false);
+    proseTopicPicks[topicId] = new Set();
+    _callValidateTopic(topicId);
+  };
+
+  window._briefDismissTopicProbe = function (topicId) {
+    const probe = topicState[topicId] && topicState[topicId].probe;
+    const probeText = probe ? (probe.question || probe.suggestion || '') : '';
+    _appendConversationEntry(topicId, probeText, '[DISMISSED — do not probe this gap again from any angle]', false);
+    _callValidateTopic(topicId);
+  };
+
   window._briefToggle = function (opt, checked) {
     if (checked && !state.constraints.includes(opt)) state.constraints.push(opt);
     if (!checked) state.constraints = state.constraints.filter(c => c !== opt);
