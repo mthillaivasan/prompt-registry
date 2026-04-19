@@ -13,7 +13,7 @@
   let restructuredBrief = null; // restructured text from Claude
   let restructuredTitle = null; // Claude-generated title; user may edit at review step
   let useRestructured = true;
-  const state = { purpose: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [],
+  const state = { purpose: '', promptType: '', inputType: '', outputType: '', audience: '', constraints: [], selectedGuardrails: [],
     clientName: '', ownerName: '', ownerRole: '', skipped: [] };
   window._briefConversation = [];
   window._briefQuestionCount = {};
@@ -58,7 +58,7 @@
     'Form responses': 'Form responses',
     'Data table': 'Data table',
     'Free text': 'Free text',
-    'Other': '',
+    'Other': 'Other',
   };
   const TOPIC_3_TO_OUTPUT_TYPE = {
     'JSON object': 'Data extraction',
@@ -66,7 +66,7 @@
     'Markdown extraction report': 'Data extraction',
     'Flag report': 'Flag report',
     'Data extraction payload': 'Data extraction',
-    'Other': '',
+    'Other': 'Other',
   };
 
   let topicState = {}; // { topic_id: { value, state: 'red'|'amber'|'green', updated_at, conversation_history?, probe? } }
@@ -95,7 +95,7 @@
 
   viewInits.brief = async function (params) {
     step = 1; validationError = '';
-    state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
+    state.purpose = ''; state.promptType = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
     state.constraints = []; state.selectedGuardrails = [];
     state.clientName = ''; state.ownerName = ''; state.ownerRole = ''; state.skipped = [];
     validationResult = null; tier3Count = 0; tier3Selected.clear(); briefScore = null; restructuredBrief = null; restructuredTitle = null; useRestructured = true;
@@ -161,6 +161,13 @@
           }
           if (topicState.topic_3_output_format && !state.outputType) {
             state.outputType = TOPIC_3_TO_OUTPUT_TYPE[topicState.topic_3_output_format.value] || '';
+          }
+          // Bug A rollup: rehydrate state.promptType from Topic 1 (multi-select array).
+          // Rule: Extraction first if present; else first picked.
+          if (topicState.topic_1_prompt_type && !state.promptType) {
+            const v = topicState.topic_1_prompt_type.value;
+            const arr = Array.isArray(v) ? v : (v ? [v] : []);
+            state.promptType = arr.includes('Extraction') ? 'Extraction' : (arr[0] || '');
           }
           state.selectedGuardrails = JSON.parse(b.selected_guardrails || '[]');
           localStorage.setItem('pr_active_brief', briefId);
@@ -638,14 +645,19 @@
     } else {
       topicState[topicId] = { value: val, state: 'green', updated_at: now };
     }
-    // Transitional dual-write: picking single-select topic 2 / 3 also sets the
-    // legacy state field so the generator handoff (state.inputType / state.outputType)
-    // keeps working during the B1→B3 window. Remove when B3 lands proper
-    // topic-to-generator piping.
+    // Transitional dual-write: topic picks also populate the legacy state fields
+    // so the generator handoff keeps working during the B1→B3 window. Remove
+    // when B3 lands proper topic-to-generator piping.
     if (topicId === 'topic_2_source_doc') {
       state.inputType = TOPIC_2_TO_INPUT_TYPE[val] || '';
     } else if (topicId === 'topic_3_output_format') {
       state.outputType = TOPIC_3_TO_OUTPUT_TYPE[val] || '';
+    } else if (topicId === 'topic_1_prompt_type') {
+      // Topic 1 is multi-select — derive the rubric-primary type.
+      // Rule: Extraction first if present; else first picked; else ''.
+      const current = topicState[topicId] && topicState[topicId].value;
+      const arr = Array.isArray(current) ? current : (current ? [current] : []);
+      state.promptType = arr.includes('Extraction') ? 'Extraction' : (arr[0] || '');
     }
     validationError = '';
     renderStep();
@@ -1050,7 +1062,13 @@
 
       if (title && !title.value) title.value = restructuredTitle || state.purpose.substring(0, 80);
 
-      const typeMap = {
+      // Bug A rollup: prefer state.promptType (Topic 1 dual-write) over the
+      // legacy typeMap inference. typeMap below is kept as dead code per the
+      // ongoing deferred-cleanup convention; it silently overrode Topic 1
+      // picks for any Output Format whose typeMap entry differed from the
+      // user's Prompt Type pick, so it must not run on the live path.
+      if (type && state.promptType) type.value = state.promptType;
+      const _typeMap_DEAD = {
         'Structured assessment': 'Analysis',
         'Executive summary': 'Summarisation',
         'Briefing note': 'Comms',
@@ -1060,7 +1078,6 @@
         'Data extraction': 'Extraction',
         'Comparison table': 'Comparison',
       };
-      if (type && state.outputType && typeMap[state.outputType]) type.value = typeMap[state.outputType];
       if (input) input.value = state.inputType || input.value;
       if (output) output.value = state.outputType || output.value;
 
