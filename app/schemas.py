@@ -152,6 +152,7 @@ class RestructureBriefRequest(BaseModel):
 
 class RestructureBriefResponse(BaseModel):
     restructured: str
+    title: str | None = None
 
 
 # ── Brief schemas ───────────────────────────────────────────────────────────

@@ -300,7 +300,14 @@ You are a senior AI consultant. Rewrite the following brief answers as a \
 single coherent paragraph that a prompt generator can use directly. \
 Write in third person describing what the AI system should do. Be specific \
 and include all constraints and guardrails mentioned. Maximum 100 words. \
-Do not add information not in the brief."""
+Do not add information not in the brief.
+
+Additionally, produce a short title (5-8 words) that summarises what this \
+prompt does. The title should be specific enough to tell a reader what the \
+prompt is for.
+
+Return your response as JSON only — no preamble, no markdown fences:
+{"restructured": "<the restructured brief text>", "title": "<the short title>"}"""
 
 
 @router.post("/briefs/restructure", response_model=RestructureBriefResponse)
@@ -312,13 +319,33 @@ def restructure_brief(
         client = anthropic.Anthropic()
         response = client.messages.create(
             model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
-            max_tokens=256,
+            max_tokens=384,
             system=_RESTRUCTURE_PROMPT,
             messages=[{"role": "user", "content": f"Brief answers:\n{body.brief_text}"}],
         )
-        return RestructureBriefResponse(restructured=response.content[0].text.strip())
+        raw = response.content[0].text.strip()
+        if raw.startswith("```"):
+            lines = raw.split("\n")
+            raw = "\n".join(lines[1:-1])
     except Exception as e:
-        return RestructureBriefResponse(restructured=body.brief_text)
+        print(f"WARNING: Brief restructuring failed: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Brief restructuring unavailable: {e}",
+        )
+
+    try:
+        parsed = json.loads(raw)
+        restructured = parsed["restructured"].strip()
+        title = parsed.get("title")
+        if title is not None:
+            title = title.strip() or None
+    except (json.JSONDecodeError, KeyError, AttributeError, TypeError) as e:
+        print(f"WARNING: Brief restructuring JSON parse failed: {e}; falling back to raw text, no title")
+        restructured = raw
+        title = None
+
+    return RestructureBriefResponse(restructured=restructured, title=title)
 
 
 # ── Generate prompt text via Claude ──────────────────────────────────────────
