@@ -260,3 +260,38 @@ Suggested sequence: Session B first, then bulk dimension authoring, then the thr
 `validate_brief` currently uses one generic three-element rubric (Specific data / Clear output / Clear next step) for every prompt type. Extraction briefs, classification briefs, summarisation briefs, and comparison briefs each have different mandatory elements — classification needs defined categories and tie-break rules; extraction needs confidence reporting and a null-handling policy; summarisation needs length constraint and inclusion/exclusion criteria; comparison needs defined criteria and a scoring basis.
 
 Swap in a rubric selected by `prompt_type` so validation pressure matches the real prompt-design decisions for that class. Non-trivial: needs 4-6 tailored rubrics and a selector. Estimate: 3-4 hours.
+
+### 6. Brief Builder as generator feeder
+
+Mental model: Brief Builder is a guided interview whose sole output is a brief the generator can turn into a ship-ready prompt with no manual user editing. Every field the generator asks for and the Brief Builder does not capture is a Brief Builder defect.
+
+Gap audit (19 April):
+- Title — done (T1 step D)
+- Prompt Type — gap
+- Deployment Target — gap
+- Risk Tier — gap
+- Input Type — gap (in prose, not structured)
+- Output Type — gap (in prose, not structured)
+
+Field treatment by type:
+- Inferred (Claude reads restructured brief, user reviews on generator): Title, Input Type, Output Type
+- Explicit structured step (Brief Builder asks, user picks from options): Risk Tier, Deployment Target
+- Hybrid (infer if possible, ask if ambiguous): Prompt Type
+
+Sequencing (next four sessions):
+
+Session 1 — Prompt Type capture. Claude infers from restructured brief (same precedent as Title). User reviews on Brief Builder review step. Flows through to generator as pre-filled dropdown. Estimate: 1-2 hours.
+
+Session 2 — Brief-type-aware validation rubrics (section 5 above). Requires Session 1 complete.
+
+Session 3 — Input Type and Output Type. Paired. Same mechanism as Title. Estimate: 2-3 hours combined.
+
+Session 4 — Risk Tier and Deployment Target. Paired. Explicit Brief Builder steps with structured options. Estimate: 2-3 hours combined.
+
+Total: ~10-12 hours across four sessions to close all generator-field gaps.
+
+Priority: highest. This is the structural fix behind "every day the tool doesn't work I write prompts manually." Each session measurably reduces friction.
+
+Not in this sequence but parallel:
+- Dimension migration (16 remaining, still blocked on admin page unless code-commit-push per dimension is acceptable)
+- Three-category architecture (prompt_content vs wrapper_metadata vs registry_policy) — separate track, addresses generator output quality not brief quality
