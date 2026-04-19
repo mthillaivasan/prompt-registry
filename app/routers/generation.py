@@ -366,7 +366,9 @@ def generate_prompt_text(
 
     selected_dims = resolve_guardrails(body, db)
     guardrail_block = "\n".join(
-        f"- {d.code} ({d.name}): {d.description}" for d in selected_dims
+        d.instructional_text if d.instructional_text
+        else f"- {d.code} ({d.name}): {d.description}"
+        for d in selected_dims
     )
     system_prompt = _GENERATE_SYSTEM_PROMPT_TEMPLATE.replace("{guardrail_block}", guardrail_block)
 

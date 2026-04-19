@@ -196,3 +196,19 @@ Scope: small once admin page infrastructure exists. Schema: new settings table w
 The AUDIT section at the end of every compliant prompt should contain a configurable list of fields, not a hardcoded set. Admin chooses which fields (generation_date, version_number, author, prompt_id, compliance_grade, regulatory_scope, etc.). REG_D2's instructional_text is already written to support this — the LLM renders whatever field list is provided.
 
 Scope: depends on runtime variable injection and admin settings. Once those exist, this is 1-2 hours. Until then, AUDIT fields are implicit in what the prompt runtime passes.
+
+## Dimension migration pattern
+
+For each scoring dimension that gets migrated to DB-driven instructional_text:
+1. Add instructional_text to the _DIMENSIONS dict entry (benefits fresh DBs)
+2. Add a targeted post-seed UPDATE to the seed file that syncs instructional_text for that specific code (benefits existing DBs)
+3. Delete the corresponding entry from REGULATORY_COMPONENTS (or whatever static dict holds it) in services/prompt_components.py
+
+Once all 17 dimensions are migrated, REGULATORY_COMPONENTS (and any sibling static dicts) can be removed entirely, closing the dual-source-of-truth problem that was flagged as Pass 2 Task 4 in an earlier PHASE2 section. Track progress on migration via this section.
+
+Migrated so far:
+- REG_D2 (Transparency) — Slot A3, 2026-04-19
+
+## Smoke-test insight from 19 April
+
+The generator currently has two parallel guardrail-content systems: DB-driven (scoring_dimensions rows rendered into the prompt via guardrail_block in generation.py) and code-driven (REGULATORY_COMPONENTS dict in prompt_components.py rendered via assemble_template). Both produce text about the same dimensions, creating duplication and occasional contradiction in the generated prompt. This was a root cause of the "governance-flavoured output" observation from 18 April smoke testing. The dimension migration pattern above resolves this per-dimension as each is migrated.

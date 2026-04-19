@@ -61,3 +61,60 @@ def test_generate_substitutes_variable_placeholders(client, auth_headers):
     assert "2026-04-19" in text
     assert "Test Maker" in text
     assert "{version_number}" in text
+
+
+# ── generate_prompt_text: instructional_text rendering (Slot A3) ─────────────
+
+def _mock_claude_returning(text: str) -> MagicMock:
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(text=text)]
+    mock_client.messages.create.return_value = mock_response
+    return mock_client
+
+
+def test_dimension_with_instructional_text_renders_clean(client, auth_headers):
+    """REG_D2 has instructional_text seeded — its guardrail block must be the
+    plain instructional_text, not '- REG_D2 (Transparency): ...'. No code
+    prefix or framework label leaks into the prompt sent to Claude."""
+    mock_client = _mock_claude_returning("body")
+
+    with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
+        resp = client.post(
+            "/prompts/generate",
+            json={
+                "title": "X",
+                "prompt_type": "Summarisation",
+                "selected_guardrails": ["REG_D2"],
+            },
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200, resp.text
+    sent_system = mock_client.messages.create.call_args.kwargs["system"]
+    assert "REG_" not in sent_system
+    assert "OWASP_" not in sent_system
+    assert "NIST_" not in sent_system
+    assert "ISO42001_" not in sent_system
+    assert "AUDIT" in sent_system  # confirms instructional_text was rendered
+
+
+def test_dimension_without_instructional_text_uses_fallback_format(client, auth_headers):
+    """REG_D1 has no instructional_text — the guardrail block must fall back
+    to the legacy '- {code} ({name}): {description}' format."""
+    mock_client = _mock_claude_returning("body")
+
+    with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
+        resp = client.post(
+            "/prompts/generate",
+            json={
+                "title": "X",
+                "prompt_type": "Summarisation",
+                "selected_guardrails": ["REG_D1"],
+            },
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200, resp.text
+    sent_system = mock_client.messages.create.call_args.kwargs["system"]
+    assert "- REG_D1 (Human Oversight):" in sent_system

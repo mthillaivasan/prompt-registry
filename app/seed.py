@@ -25,6 +25,18 @@ def _utcnow() -> str:
 
 # ── Scoring dimensions ────────────────────────────────────────────────────────
 
+_REG_D2_INSTRUCTIONAL_TEXT = (
+    "Always end your output with a section titled AUDIT. Inside the AUDIT "
+    "section, render each audit field provided to you on its own line, in "
+    "the format 'field name: field value'. The audit fields and their "
+    "values will be provided in the user message. Do not modify field "
+    "names, do not omit any field, do not add commentary or explanation "
+    "inside the AUDIT section, and do not omit the AUDIT section under any "
+    "circumstances. If a field value is missing, render the literal "
+    "placeholder string (such as '{generation_date}') in its place so the "
+    "missing value is visible."
+)
+
 _DIMENSIONS = [
     # ── Regulatory — Blocking ────────────────────────────────────────────────
     dict(
@@ -50,6 +62,7 @@ _DIMENSIONS = [
         is_mandatory=True, blocking_threshold=2, scoring_type="Blocking",
         applies_to_types="[]", applies_if=None, is_active=True, sort_order=20,
         tier=2, tier2_trigger="Output visible externally OR deployment_target contains Agent",
+        instructional_text=_REG_D2_INSTRUCTIONAL_TEXT,
     ),
     dict(
         code="REG_D3", name="Data Minimisation",
@@ -339,11 +352,20 @@ def _seed_admin(db: Session) -> None:
 
 
 def _seed_dimensions(db: Session) -> None:
-    if db.query(ScoringDimension).count() > 0:
-        return
-    for d in _DIMENSIONS:
-        db.add(ScoringDimension(dimension_id=_uuid(), **d))
-    db.commit()
+    if db.query(ScoringDimension).count() == 0:
+        for d in _DIMENSIONS:
+            db.add(ScoringDimension(dimension_id=_uuid(), **d))
+        db.commit()
+    _sync_instructional_text(db)
+
+
+def _sync_instructional_text(db: Session) -> None:
+    # Targeted per-dimension sync. See PHASE2.md "Dimension migration pattern".
+    # Only touches instructional_text — other admin-editable fields are preserved.
+    row = db.query(ScoringDimension).filter_by(code="REG_D2").first()
+    if row and row.instructional_text != _REG_D2_INSTRUCTIONAL_TEXT:
+        row.instructional_text = _REG_D2_INSTRUCTIONAL_TEXT
+        db.commit()
 
 
 def _seed_patterns(db: Session) -> None:
