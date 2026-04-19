@@ -6,6 +6,7 @@
   let validationError = '';
   let validationResult = null;
   let tier3Count = 0; // question counter per step
+  let tier3Selected = new Set(); // multi-select picks for current Tier-3 question
   let briefScore = null; // { score, label, weakest_dimension, improvement_tip, dimensions }
   let restructuredBrief = null; // restructured text from Claude
   let restructuredTitle = null; // Claude-generated title; user may edit at review step
@@ -35,7 +36,7 @@
     state.purpose = ''; state.inputType = ''; state.outputType = ''; state.audience = '';
     state.constraints = []; state.selectedGuardrails = [];
     state.clientName = ''; state.ownerName = ''; state.ownerRole = ''; state.skipped = [];
-    validationResult = null; tier3Count = 0; briefScore = null; restructuredBrief = null; restructuredTitle = null; useRestructured = true;
+    validationResult = null; tier3Count = 0; tier3Selected.clear(); briefScore = null; restructuredBrief = null; restructuredTitle = null; useRestructured = true;
     window._briefConversation = []; window._briefQuestionCount = {};
     guardrailData = null; briefId = null;
 
@@ -210,13 +211,15 @@
           <div style="font-size:15px;color:var(--text);margin-bottom:10px;font-family:var(--font-heading)">${esc(validationResult.question || 'Help me understand this better')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">`;
         (validationResult.options || []).forEach(opt => {
-          html += `<button class="btn btn-outline btn-sm" onclick="window._briefPickOption('${esc(opt)}')">${esc(opt)}</button>`;
+          const sel = tier3Selected.has(opt);
+          const cls = sel ? 'btn btn-gold btn-sm' : 'btn btn-outline btn-sm';
+          html += `<button class="${cls}" onclick="window._briefToggleOption('${esc(opt)}')">${sel ? '&#10003; ' : ''}${esc(opt)}</button>`;
         });
         html += `<button class="btn btn-outline btn-sm" style="color:var(--text2);border-color:var(--border)" onclick="window._briefSkipQuestion()">Not applicable</button>`;
         html += `</div>
           <div style="display:flex;gap:8px;margin-bottom:10px">
-            <input type="text" id="brief-tier3-free" style="flex:1" placeholder="${esc(validationResult.free_text_placeholder || 'Or type your answer...')}">
-            <button class="btn btn-gold btn-sm" onclick="window._briefSubmitFree()">Continue with this</button>
+            <input type="text" id="brief-tier3-free" style="flex:1" placeholder="${esc(validationResult.free_text_placeholder || 'Or type your answer...')}" onkeydown="if(event.key==='Enter'){event.preventDefault();window._briefSubmit();}">
+            <button class="btn btn-gold btn-sm" onclick="window._briefSubmit()">Continue</button>
           </div>
           <div style="display:flex;gap:16px">
             <a style="font-size:12px;color:var(--text2);cursor:pointer" onclick="window._briefSkipQuestion()">Skip this question</a>
@@ -537,7 +540,7 @@
     const skippedStep = step;
     const skippedName = STEP_NAMES[step - 1] || 'Step ' + step;
     state.skipped.push({ step: skippedStep, name: skippedName, timestamp: new Date().toISOString() });
-    validationError = ''; validationResult = null; tier3Count = 0;
+    validationError = ''; validationResult = null; tier3Count = 0; tier3Selected.clear();
     step++;
     await updateScore();
     await saveBriefToServer();
@@ -580,7 +583,7 @@
   };
   window._briefSkipSuggestion = function () {
     window._briefConversation.push({ role: 'system', step, question: validationResult ? validationResult.suggestion : '', answer: 'skipped', skipped: true });
-    validationResult = null; validationError = '';
+    validationResult = null; validationError = ''; tier3Selected.clear();
     step++; renderStep();
   };
   window._briefSkipQuestion = function () {
@@ -588,7 +591,7 @@
     if (briefId) {
       api('/briefs/' + briefId + '/skip-step/' + step, { method: 'POST' }).catch(() => {});
     }
-    validationResult = null; validationError = ''; tier3Count = 0;
+    validationResult = null; validationError = ''; tier3Count = 0; tier3Selected.clear();
     step++; renderStep();
     toast('Question skipped');
   };
@@ -597,28 +600,35 @@
     if (briefId) {
       api('/briefs/' + briefId + '/skip-step/' + step, { method: 'POST' }).catch(() => {});
     }
-    validationResult = null; validationError = ''; tier3Count = 0;
+    validationResult = null; validationError = ''; tier3Count = 0; tier3Selected.clear();
     step++; renderStep();
     toast('Moved on');
   };
-  window._briefPickOption = function (opt) {
-    window._briefConversation.push({ role: 'system', step, question: validationResult ? validationResult.question : '', answer: opt, skipped: false });
-    state.purpose = state.purpose.trim() + ' — ' + opt;
-    validationResult = null; validationError = '';
+  window._briefToggleOption = function (opt) {
+    if (tier3Selected.has(opt)) tier3Selected.delete(opt);
+    else tier3Selected.add(opt);
     renderStep();
-    window._briefNext();
   };
-  window._briefSubmitFree = function () {
+  window._briefSubmit = function () {
     const el = document.getElementById('brief-tier3-free');
-    const val = el ? el.value.trim() : '';
-    if (!val) { toast('Enter an answer or tap an option above', 'error'); return; }
-    window._briefConversation.push({ role: 'system', step, question: validationResult ? validationResult.question : '', answer: val, skipped: false });
-    state.purpose = state.purpose.trim() + ' — ' + val;
+    const free = el ? el.value.trim() : '';
+    const picks = Array.from(tier3Selected);
+    if (!picks.length && !free) {
+      toast('Pick one or more options or type an answer', 'error');
+      return;
+    }
+    const parts = [];
+    if (picks.length) parts.push(picks.join(', '));
+    if (free) parts.push(free);
+    const answer = parts.join('. ') + '.';
+    window._briefConversation.push({ role: 'system', step, question: validationResult ? validationResult.question : '', answer, skipped: false });
+    state.purpose = state.purpose.trim() + ' — ' + answer;
+    tier3Selected.clear();
     validationResult = null; validationError = '';
     renderStep();
     window._briefNext();
   };
-  window._briefPrev = function () { saveStepState(); validationError = ''; validationResult = null; tier3Count = 0; step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
+  window._briefPrev = function () { saveStepState(); validationError = ''; validationResult = null; tier3Count = 0; tier3Selected.clear(); step--; guardrailData = step < 6 ? null : guardrailData; renderStep(); };
   window._briefNext = async function () {
     saveStepState();
     if (!isStepValid()) { validationError = getValidationHint(); renderStep(); return; }
@@ -653,7 +663,7 @@
       }
     }
 
-    validationError = ''; validationResult = null; tier3Count = 0;
+    validationError = ''; validationResult = null; tier3Count = 0; tier3Selected.clear();
     step++;
     await updateScore();
     await saveBriefToServer();
@@ -669,7 +679,7 @@
     await loadRestructuredBrief();
     renderReview();
   };
-  window._briefBack = function () { step = 1; validationError = ''; validationResult = null; tier3Count = 0; guardrailData = null; renderStep(); };
+  window._briefBack = function () { step = 1; validationError = ''; validationResult = null; tier3Count = 0; tier3Selected.clear(); guardrailData = null; renderStep(); };
 
   async function updateScore() {
     try {
@@ -760,4 +770,19 @@
       if (r) state.ownerRole = r.value.trim();
     }
   }
+
+  // Tier-3 Enter-to-submit. Gated on the question card being in the DOM so
+  // this listener is a no-op outside the Brief Builder. INPUT/TEXTAREA/BUTTON
+  // are excluded so the free-text input's own onkeydown handles itself,
+  // toggle buttons keep Enter-to-activate, and the catch-all only fires when
+  // focus is on the body / wrapper.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (!document.getElementById('brief-tier3-free')) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
+    if (tier3Selected.size === 0) return;
+    e.preventDefault();
+    window._briefSubmit();
+  });
 })();
