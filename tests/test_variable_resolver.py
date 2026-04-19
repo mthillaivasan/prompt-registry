@@ -1,35 +1,46 @@
-from datetime import datetime
-
 from services.variable_resolver import VariableResolver
 
 
-def test_generation_date_resolves_to_today_iso():
-    resolver = VariableResolver()
-    assert resolver.resolve("{generation_date}") == datetime.utcnow().strftime("%Y-%m-%d")
+def test_generation_date_substitutes_passed_value():
+    assert VariableResolver().resolve("{generation_date}", generation_date="2026-04-19") == "2026-04-19"
+
+
+def test_version_number_substitutes_passed_value():
+    assert VariableResolver().resolve("v{version_number}", version_number=3) == "v3"
+
+
+def test_author_substitutes_passed_value():
+    assert VariableResolver().resolve("by {author}", author="Jane Doe") == "by Jane Doe"
+
+
+def test_missing_value_renders_literal_placeholder():
+    assert VariableResolver().resolve("{generation_date} {version_number} {author}") \
+        == "{generation_date} {version_number} {author}"
 
 
 def test_unknown_placeholder_passes_through_literal():
-    resolver = VariableResolver()
-    assert resolver.resolve("{unknown_variable}") == "{unknown_variable}"
+    assert VariableResolver().resolve("{unknown_variable}") == "{unknown_variable}"
 
 
-def test_multiple_placeholders_all_resolve():
-    resolver = VariableResolver()
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    assert resolver.resolve("{generation_date} and {generation_date}") == f"{today} and {today}"
+def test_multiple_occurrences_of_same_placeholder_all_resolve():
+    assert VariableResolver().resolve(
+        "{generation_date} and {generation_date}", generation_date="2026-04-19"
+    ) == "2026-04-19 and 2026-04-19"
 
 
 def test_empty_string_unchanged():
-    resolver = VariableResolver()
-    assert resolver.resolve("") == ""
+    assert VariableResolver().resolve("") == ""
 
 
 def test_plain_text_without_placeholders_unchanged():
-    resolver = VariableResolver()
-    assert resolver.resolve("just plain text with no braces") == "just plain text with no braces"
+    assert VariableResolver().resolve("just plain text") == "just plain text"
 
 
 def test_placeholder_embedded_in_surrounding_text():
-    resolver = VariableResolver()
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    assert resolver.resolve("on {generation_date} the report was issued") == f"on {today} the report was issued"
+    assert VariableResolver().resolve(
+        "on {generation_date} the report was issued", generation_date="2026-04-19"
+    ) == "on 2026-04-19 the report was issued"
+
+
+def test_explicit_none_kwarg_renders_literal():
+    assert VariableResolver().resolve("{version_number}", version_number=None) == "{version_number}"
