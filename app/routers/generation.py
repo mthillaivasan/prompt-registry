@@ -405,7 +405,9 @@ def validate_topic(
         f"SIBLING ANSWERS FOR CONTEXT ONLY:\n{sibling_block}\n\n"
         f"PRIOR COACHING ON THIS TOPIC:\n{history_block}"
     )
-    system_prompt = build_validate_topic_system_prompt(body.prompt_type, body.topic_id)
+    system_prompt = build_validate_topic_system_prompt(
+        body.prompt_type, body.topic_id, reference_examples=body.reference_examples,
+    )
 
     try:
         client = anthropic.Anthropic()

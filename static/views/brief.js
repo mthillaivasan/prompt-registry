@@ -727,12 +727,37 @@
       const stateStr = entry.state || 'red';
       const stateColour = _stateColour(stateStr);
       const isValidating = entry._validating;
+      const refs = entry._references;
+      const refsShown = !!entry._referencesShown;
+      const refsLoading = !!entry._referencesLoading;
+      const refsEmpty = Array.isArray(refs) && refs.length === 0;
+      const refsBtnLabel = refsLoading ? 'Loading…' : 'See reference';
+      const refsBtnDisabled = refsLoading || refsEmpty;
+      const refsBtnTitle = refsEmpty
+        ? 'No matching examples in library yet — add more via /library admin.'
+        : (refsShown ? 'Hide reference examples' : 'Show reference examples from the library');
       html += `<div class="card" style="margin-bottom:10px;padding:12px 14px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:${probe ? '10px' : '0'}">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:${(probe || refsShown) ? '10px' : '0'}">
           <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${stateColour}"></span>
           <span style="font-size:14px;font-weight:600;flex:1">${esc(topic.name)}</span>
+          <button class="btn btn-outline btn-sm" ${refsBtnDisabled ? 'disabled' : ''} title="${escAttr(refsBtnTitle)}" data-topic="${escAttr(topic.id)}" onclick="window._briefToggleTopicReferences(this.dataset.topic)">${esc(refsBtnLabel)}</button>
           <button class="btn btn-outline btn-sm" ${isValidating ? 'disabled' : ''} data-topic="${escAttr(topic.id)}" onclick="window._briefReviewTopic(this.dataset.topic)">${isValidating ? 'Checking…' : (probe ? 'Re-review' : 'Review')}</button>
         </div>`;
+      if (refsShown && Array.isArray(refs) && refs.length > 0) {
+        html += `<div style="background:var(--surface2);border-left:3px solid var(--teal);padding:10px 12px;border-radius:0 4px 4px 0;margin-bottom:10px">
+          <div style="font-size:13px;color:var(--teal);margin-bottom:8px;font-weight:600">Reference examples from the library</div>`;
+        refs.forEach(r => {
+          html += `<div style="margin-bottom:10px">
+            <div style="font-size:13px;font-weight:600">${esc(r.title)}</div>`;
+          if (r.source_provenance) {
+            html += `<div style="font-size:11px;color:var(--text2);margin-bottom:4px">${esc(r.source_provenance)}</div>`;
+          }
+          html += `<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;font-family:var(--font-mono);line-height:1.5">${esc(r.excerpt)}</div>
+          </div>`;
+        });
+        html += `<div style="font-size:11px;color:var(--text2);font-style:italic">Illustration only — your brief should fit your own workflow, not mirror these.</div>
+        </div>`;
+      }
       if (probe && probe.suggestion) {
         html += `<div style="background:var(--surface2);border-left:3px solid var(--accent);padding:10px 12px;border-radius:0 4px 4px 0">
           <div style="font-size:13px;color:var(--accent);margin-bottom:4px;font-weight:600">Suggestion</div>
@@ -781,6 +806,7 @@
     const history = (entry.conversation_history || []).map(e => Object.assign({}, e, { topic_id: topicId }));
     topicState[topicId] = Object.assign({}, entry, { _validating: true });
     renderStep();
+    const cachedRefs = (entry._references || []).map(r => ({ title: r.title, excerpt: r.excerpt }));
     try {
       const resp = await api('/prompts/briefs/validate-topic', { method: 'POST', body: {
         topic_id: topicId,
@@ -788,6 +814,7 @@
         topic_answer: state.purpose,
         sibling_answers: _buildSiblingAnswers(),
         conversation_history: history,
+        reference_examples: cachedRefs,
       }});
       const next = Object.assign({}, topicState[topicId], {
         state: resp.state || 'red',
@@ -830,6 +857,38 @@
 
   window._briefReviewTopic = function (topicId) {
     _callValidateTopic(topicId);
+  };
+
+  window._briefToggleTopicReferences = async function (topicId) {
+    const entry = topicState[topicId] || {};
+    // If already fetched, just toggle visibility.
+    if (Array.isArray(entry._references)) {
+      topicState[topicId] = Object.assign({}, entry, { _referencesShown: !entry._referencesShown });
+      renderStep();
+      return;
+    }
+    // First open: fetch matching references for this prompt_type + topic_id.
+    const promptType = _selectedPromptTypeForRubric();
+    if (!promptType) {
+      toast('Pick a prompt type first', 'error');
+      return;
+    }
+    topicState[topicId] = Object.assign({}, entry, { _referencesLoading: true });
+    renderStep();
+    try {
+      const qs = new URLSearchParams({ prompt_type: promptType, topic_id: topicId, limit: 3 });
+      const refs = await api('/library/relevant?' + qs.toString());
+      topicState[topicId] = Object.assign({}, topicState[topicId], {
+        _references: Array.isArray(refs) ? refs : [],
+        _referencesShown: Array.isArray(refs) && refs.length > 0,
+        _referencesLoading: false,
+      });
+      renderStep();
+    } catch (e) {
+      topicState[topicId] = Object.assign({}, topicState[topicId], { _referencesLoading: false });
+      renderStep();
+      toast('Could not load references: ' + ((e && e.message) || 'unknown error'), 'error');
+    }
   };
 
   window._briefUseTopicSuggestion = function (topicId) {

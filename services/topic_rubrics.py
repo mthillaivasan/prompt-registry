@@ -286,14 +286,48 @@ OPTIONS RULES when state is red:
 Return ONLY valid JSON. No preamble, no markdown fences."""
 
 
-def build_validate_topic_system_prompt(prompt_type: str, topic_id: str) -> str:
+_REFERENCE_EXAMPLES_HEADER = (
+    "=== REFERENCE EXAMPLES (for illustration only — do not copy verbatim) ===\n"
+    "These are excerpts from other prompts in the registry that have addressed "
+    "the focal topic. They are context for your coaching, not a script. Do not "
+    "quote them at the user. Do not probe gaps just because the user's brief "
+    "does not match them.\n\n"
+)
+
+
+def _format_reference_examples(examples) -> str:
+    blocks = []
+    for ex in examples or []:
+        title = getattr(ex, "title", None) or (ex.get("title") if isinstance(ex, dict) else None)
+        excerpt = getattr(ex, "excerpt", None) or (ex.get("excerpt") if isinstance(ex, dict) else None)
+        if not title or not excerpt:
+            continue
+        blocks.append(f"### {title}\n{excerpt}")
+    return "\n\n".join(blocks)
+
+
+def build_validate_topic_system_prompt(prompt_type: str, topic_id: str, reference_examples=None) -> str:
     # .replace() rather than .format() — the template contains literal JSON
     # braces (the response-shape examples) that str.format would try to
     # interpret as format specifiers.
     rubric = get_rubric(prompt_type, topic_id)
-    return (
+    base = (
         _VALIDATE_TOPIC_TEMPLATE
         .replace("{topic_name}", rubric["name"])
         .replace("{rag_rules}", rubric["rag_rules"])
         .replace("{rubric_fragment}", rubric["rubric_fragment"])
     )
+
+    if not reference_examples:
+        return base
+
+    formatted = _format_reference_examples(reference_examples)
+    if not formatted:
+        return base
+
+    # Insert the reference-examples block between COACHING INSTRUCTIONS and
+    # RESPONSE SHAPE — it is context for the coaching, not part of the
+    # response contract.
+    marker = "=== RESPONSE SHAPE ==="
+    insertion = _REFERENCE_EXAMPLES_HEADER + formatted + "\n\n"
+    return base.replace(marker, insertion + marker, 1)

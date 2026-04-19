@@ -151,12 +151,18 @@ class BriefTopicEntry(BaseModel):
     conversation_history: list[ConversationEntry] = []
 
 
+class ReferenceExample(BaseModel):
+    title: str
+    excerpt: str
+
+
 class ValidateTopicRequest(BaseModel):
     topic_id: str = Field(min_length=1)
     prompt_type: PromptType
     topic_answer: str = ""
     sibling_answers: dict[str, str] = {}
     conversation_history: list[ConversationEntry] = []
+    reference_examples: list[ReferenceExample] = []
 
 
 class ValidateTopicResponse(BaseModel):

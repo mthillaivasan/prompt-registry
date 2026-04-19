@@ -182,6 +182,75 @@ def test_unknown_topic_id_returns_400(client, auth_headers):
     assert mock_client.messages.create.call_count == 0
 
 
+def test_reference_examples_injected_into_system_prompt(client, auth_headers):
+    """Drop L2: when reference_examples is non-empty, the block must reach
+    Claude's system prompt with title + excerpt, and an explicit "do not copy"
+    framing. Empty list must leave the system prompt unchanged."""
+    mock_client = _mock_claude_returning('{"state": "green"}')
+
+    body = {
+        "topic_id": "topic_6_data_points",
+        "prompt_type": "Extraction",
+        "topic_answer": "fields to extract: cut-off time, ISIN",
+        "sibling_answers": {},
+        "conversation_history": [],
+        "reference_examples": [
+            {"title": "Prospectus extraction", "excerpt": "Fields to extract include subscription cut-off time and minimum investment."},
+            {"title": "Policy clause extraction", "excerpt": "Extract every clause matching one of eight regulated topics."},
+        ],
+    }
+    with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
+        resp = _post(client, auth_headers, body)
+
+    assert resp.status_code == 200, resp.text
+    sent_system = mock_client.messages.create.call_args.kwargs["system"]
+    assert "REFERENCE EXAMPLES" in sent_system
+    assert "do not copy verbatim" in sent_system
+    assert "Prospectus extraction" in sent_system
+    assert "subscription cut-off time" in sent_system
+    assert "Policy clause extraction" in sent_system
+    # Block must sit BEFORE the response shape so it stays context, not contract
+    assert sent_system.index("REFERENCE EXAMPLES") < sent_system.index("RESPONSE SHAPE")
+
+
+def test_empty_reference_examples_leaves_system_prompt_clean(client, auth_headers):
+    mock_client = _mock_claude_returning('{"state": "green"}')
+
+    body = {
+        "topic_id": "topic_6_data_points",
+        "prompt_type": "Extraction",
+        "topic_answer": "a",
+        "sibling_answers": {},
+        "conversation_history": [],
+        "reference_examples": [],
+    }
+    with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
+        resp = _post(client, auth_headers, body)
+
+    assert resp.status_code == 200, resp.text
+    sent_system = mock_client.messages.create.call_args.kwargs["system"]
+    assert "REFERENCE EXAMPLES" not in sent_system
+
+
+def test_reference_examples_field_is_optional(client, auth_headers):
+    """Back-compat: callers that don't send reference_examples still work."""
+    mock_client = _mock_claude_returning('{"state": "green"}')
+
+    body = {
+        "topic_id": "topic_6_data_points",
+        "prompt_type": "Extraction",
+        "topic_answer": "a",
+        "sibling_answers": {},
+        "conversation_history": [],
+    }
+    with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
+        resp = _post(client, auth_headers, body)
+
+    assert resp.status_code == 200, resp.text
+    sent_system = mock_client.messages.create.call_args.kwargs["system"]
+    assert "REFERENCE EXAMPLES" not in sent_system
+
+
 def test_unsupported_prompt_type_returns_501(client, auth_headers):
     """Only Extraction has a rubric set in Phase A; others return 501."""
     mock_client = _mock_claude_returning('{"state": "green"}')

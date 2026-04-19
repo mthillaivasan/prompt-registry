@@ -22,7 +22,9 @@ from app.schemas import (
     PromptLibraryListOut,
     PromptLibraryOut,
     PromptLibraryUpdate,
+    PromptType,
 )
+from services.library_excerpt import extract_topic_excerpt
 
 router = APIRouter(prefix="/library", tags=["library"])
 
@@ -67,6 +69,52 @@ def list_library(
         "page_size": page_size,
         "has_next": (page * page_size) < total,
     }
+
+
+@router.get("/relevant")
+def relevant_library_entries(
+    prompt_type: PromptType,
+    topic_id: str = Query(..., min_length=1),
+    limit: int = Query(3, ge=1, le=10),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return library entries relevant to the focal topic for few-shot
+    coaching context and "See reference" affordances in Brief Builder.
+
+    Any authenticated user may read this. No Admin gate — Makers building
+    briefs are the primary consumers. Entries whose topic_coverage contains
+    the focal topic_id rank first; within each band, newest first. Per-topic
+    excerpt is computed at request time via services.library_excerpt; entries
+    where the extractor returns None are dropped so the UI never sees empty
+    excerpt strings.
+    """
+    candidates = (
+        db.query(PromptLibrary)
+        .filter(PromptLibrary.prompt_type == prompt_type)
+        .order_by(PromptLibrary.created_at.desc())
+        .all()
+    )
+
+    scored: list[tuple[int, dict]] = []
+    for c in candidates:
+        excerpt = extract_topic_excerpt(c.full_text, topic_id)
+        if not excerpt:
+            continue
+        try:
+            coverage = json.loads(c.topic_coverage or "[]")
+        except (json.JSONDecodeError, TypeError):
+            coverage = []
+        topic_rank = 0 if topic_id in coverage else 1
+        scored.append((topic_rank, {
+            "library_id": c.library_id,
+            "title": c.title,
+            "source_provenance": c.source_provenance,
+            "excerpt": excerpt,
+        }))
+
+    scored.sort(key=lambda pair: pair[0])
+    return [payload for _, payload in scored[:limit]]
 
 
 @router.get("/{library_id}", response_model=PromptLibraryOut)
