@@ -255,11 +255,32 @@ Blocked on Session B (admin/dimensions page). Without the admin page, each migra
 
 Suggested sequence: Session B first, then bulk dimension authoring, then the three priorities above (multi-select, page citations, cost display).
 
-### 5. Brief-type-aware validation rubrics
+### 5. Step 1 refinement loop
 
-`validate_brief` currently uses one generic three-element rubric (Specific data / Clear output / Clear next step) for every prompt type. Extraction briefs, classification briefs, summarisation briefs, and comparison briefs each have different mandatory elements — classification needs defined categories and tie-break rules; extraction needs confidence reporting and a null-handling policy; summarisation needs length constraint and inclusion/exclusion criteria; comparison needs defined criteria and a scoring basis.
+Observation from 19 April smoke test: Brief Builder Step 1 evaluates the brief once, shows one suggestion or question, and advances on any click. No iteration. Briefs exit Step 1 barely better than they entered.
 
-Swap in a rubric selected by `prompt_type` so validation pressure matches the real prompt-design decisions for that class. Non-trivial: needs 4-6 tailored rubrics and a selector. Estimate: 3-4 hours.
+Design: Step 1 becomes a refinement loop.
+
+Flow:
+- User types brief → validate_brief runs
+- If Tier 1, Next stage available, user advances when ready
+- If Tier 2/3, suggestion/question shown with two controls:
+  - "Ignore this line of thought" — dismiss, re-validate, probe next gap
+  - "Next stage" — exit loop, advance to Step 2
+- Auto re-validate on: edit to brief text (after debounce), Tier 3 answer submission, Tier 2 "Use this addition" click
+- Loop continues until Tier 1 or Next stage
+
+No timeout, no cap on iterations, no dismissed-item tracking beyond conversation_history. Single user context.
+
+Implementation:
+- Frontend: brief.js Step 1 state refactor. Two buttons on suggestion/question card. Auto re-validate triggers on relevant interactions.
+- Backend: validate_brief unchanged; conversation_history already handles dismissed items via the filter.
+
+Also resolves the stale-feedback problem observed on 19 April: when the user edits the brief textarea after a Tier 2 suggestion is shown, the suggestion currently lingers with no indication it's stale. Auto re-validate on textarea edit clears the stale suggestion and re-runs validation in one move.
+
+Estimate: 2-3 hours.
+
+Priority: highest — immediate. This is the container that makes today's grounded-questions redesign actually useful to users.
 
 ### 6. Brief Builder as generator feeder
 
@@ -282,7 +303,7 @@ Sequencing (next four sessions):
 
 Session 1 — Prompt Type capture. Claude infers from restructured brief (same precedent as Title). User reviews on Brief Builder review step. Flows through to generator as pre-filled dropdown. Estimate: 1-2 hours.
 
-Session 2 — Brief-type-aware validation rubrics (section 5 above). Requires Session 1 complete.
+Session 2 — Brief-type-aware validation rubrics (section 7 below). Requires Session 1 complete.
 
 Session 3 — Input Type and Output Type. Paired. Same mechanism as Title. Estimate: 2-3 hours combined.
 
@@ -290,8 +311,14 @@ Session 4 — Risk Tier and Deployment Target. Paired. Explicit Brief Builder st
 
 Total: ~10-12 hours across four sessions to close all generator-field gaps.
 
-Priority: highest. This is the structural fix behind "every day the tool doesn't work I write prompts manually." Each session measurably reduces friction.
+Priority: highest — strategic. This is the structural fix behind "every day the tool doesn't work I write prompts manually." Each session measurably reduces friction. Starts once section 5 lands.
 
 Not in this sequence but parallel:
 - Dimension migration (16 remaining, still blocked on admin page unless code-commit-push per dimension is acceptable)
 - Three-category architecture (prompt_content vs wrapper_metadata vs registry_policy) — separate track, addresses generator output quality not brief quality
+
+### 7. Brief-type-aware validation rubrics
+
+`validate_brief` currently uses one generic three-element rubric (Specific data / Clear output / Clear next step) for every prompt type. Extraction briefs, classification briefs, summarisation briefs, and comparison briefs each have different mandatory elements — classification needs defined categories and tie-break rules; extraction needs confidence reporting and a null-handling policy; summarisation needs length constraint and inclusion/exclusion criteria; comparison needs defined criteria and a scoring basis.
+
+Swap in a rubric selected by `prompt_type` so validation pressure matches the real prompt-design decisions for that class. Non-trivial: needs 4-6 tailored rubrics and a selector. Estimate: 3-4 hours.
