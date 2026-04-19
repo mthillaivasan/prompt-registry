@@ -323,6 +323,18 @@ Not in this sequence but parallel:
 
 Swap in a rubric selected by `prompt_type` so validation pressure matches the real prompt-design decisions for that class. Non-trivial: needs 4-6 tailored rubrics and a selector. Estimate: 3-4 hours.
 
+### 8. Output design as a prose topic in Step 2 coaching
+
+Observation from 19 April: current Extraction prose topics (data points, per-field format, null handling, confidence, error modes) don't cover output layout or reviewability. Generated prompts produce technically-correct output formats (JSON, prose) but not review-optimised ones (bulleted, labelled, logically ordered, brief). Users currently have to edit the generated prompt to impose reviewer-friendly structure after the fact.
+
+Surfaced again during Drop L1 fixture authoring (19 April): the first draft of all five hand-authored seed entries defaulted to "Output strict JSON" with no worked example. If reference material ships in that shape, it teaches future briefs the wrong default. Fixture was rewritten before seeding; the underlying gap is the missing topic.
+
+Fix: add a sixth prose topic "Output design for reviewer" covering layout (bulleted / labelled / sectioned), logical ordering, field labelling, null-case visual handling, brevity threshold, and whether a worked example is included. `validate-topic` rubric for this topic probes gaps and proposes a worked output example grounded in the brief's other topics.
+
+Estimate: 1-2 hours. Fits the same pattern as existing topics 6-10.
+
+Priority: high. Direct impact on whether generated prompts need manual review-structure edits before ship. Complementary to the Brief Builder example library (Drop L2) — the library surfaces good output examples, this topic asks the user to demand one.
+
 ### Brief deletion workflow missing
 
 Observation from 19 April B1 smoke testing: briefs accumulate on the dashboard with no way to remove them. Only /briefs/{id}/abandon exists, which sets status but does not remove from list view.
