@@ -175,3 +175,24 @@ Open question: who owns curating the seeded example library? Charlie Hainsworth 
 ## Future optimisations
 
 Cache invalidation trigger fn_invalidate_cache_on_dimension_update fires on every column update to scoring_dimensions, including columns that don't affect compliance scoring (instructional_text, updated_at, updated_by). Makes cache re-computation wasteful for display-only edits. Optimise by making the trigger conditional on specific columns (OLD.score_5_criteria != NEW.score_5_criteria OR OLD.is_active != NEW.is_active, etc.) once registry scale makes the waste noticeable. Not urgent.
+
+## Infrastructure surfaced by dimension writing
+
+As each scoring dimension's instructional_text gets written, it surfaces infrastructure gaps that the prompt registry currently does not have. Track these here so they're not lost.
+
+### Runtime variable injection system
+Prompts contain placeholders like {generation_date}, {version_number}, {author}, {client_name}. At invocation time (not generation time), the calling code substitutes real values for the placeholders before passing the prompt to the LLM. Required for: REG_D2 AUDIT section content, any prompt that needs session-specific or context-specific values.
+
+Design questions: which variables are supported (fixed list vs dynamic)? Who provides values (runtime caller, registry automatic, user)? What happens when a value is missing (error, literal placeholder, empty string)? Who can define new variables?
+
+Scope: moderate. Probably a VariableResolver service called by the prompt-run endpoint before forwarding to Claude. Estimate: 4-6 hours for first cut.
+
+### Admin settings for registry-wide configuration
+The registry needs configurable values: date format (DD-MMM-YYYY vs ISO 8601 vs locale-specific), organisation name, default author when not otherwise specified, AUDIT field list, probably more. Admin-editable at /admin/settings.
+
+Scope: small once admin page infrastructure exists. Schema: new settings table with key-value pairs, seeded with defaults. Admin page lists and edits. Generator/runtime reads on each invocation. Estimate: 2-3 hours.
+
+### Configurable AUDIT field list
+The AUDIT section at the end of every compliant prompt should contain a configurable list of fields, not a hardcoded set. Admin chooses which fields (generation_date, version_number, author, prompt_id, compliance_grade, regulatory_scope, etc.). REG_D2's instructional_text is already written to support this — the LLM renders whatever field list is provided.
+
+Scope: depends on runtime variable injection and admin settings. Once those exist, this is 1-2 hours. Until then, AUDIT fields are implicit in what the prompt runtime passes.
