@@ -69,6 +69,17 @@
     'Other': 'Other',
   };
 
+  // Attribute-safe escape. esc() from base.html encodes body-text (< > &) but
+  // leaves quotes unencoded, which breaks any attribute context that
+  // interpolates Claude-generated strings. Use this for onclick="…", placeholder="…",
+  // id="…", etc. where the interpolated value may contain ' or ".
+  function escAttr(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   let topicState = {}; // { topic_id: { value, state: 'red'|'amber'|'green', updated_at, conversation_history?, probe? } }
   let expandedTopic = null; // id of the currently-expanded topic, or null
 
@@ -292,7 +303,7 @@
         topic.options.forEach(opt => {
           const sel = pickedArr.includes(opt);
           const cls = sel ? 'btn btn-gold btn-sm' : 'btn btn-outline btn-sm';
-          html += `<button class="${cls}" onclick="window._briefPickTopic('${esc(topic.id)}','${esc(opt)}')">${esc(opt)}</button>`;
+          html += `<button class="${cls}" onclick="window._briefPickTopic('${escAttr(topic.id)}','${escAttr(opt)}')">${esc(opt)}</button>`;
         });
         html += `</div>
         </div>`;
@@ -323,7 +334,7 @@
         <div style="display:flex;flex-wrap:wrap;gap:8px">`;
       AUDIENCE_OPTIONS.forEach(opt => {
         const sel = state.audience === opt;
-        html += `<button class="btn ${sel ? 'btn-primary' : 'btn-outline'}" onclick="window._briefSelect('audience','${esc(opt)}')">${esc(opt)}</button>`;
+        html += `<button class="btn ${sel ? 'btn-primary' : 'btn-outline'}" onclick="window._briefSelect('audience','${escAttr(opt)}')">${esc(opt)}</button>`;
       });
       html += '</div>';
       if (validationError && !state.audience) {
@@ -336,7 +347,7 @@
       CONSTRAINT_OPTIONS.forEach(opt => {
         const checked = state.constraints.includes(opt) ? 'checked' : '';
         html += `<label style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #2e2e2e;cursor:pointer;width:100%" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
-          <input type="checkbox" style="width:20px;height:20px;flex-shrink:0" ${checked} onchange="window._briefToggle('${esc(opt)}',this.checked)">
+          <input type="checkbox" style="width:20px;height:20px;flex-shrink:0" ${checked} onchange="window._briefToggle('${escAttr(opt)}',this.checked)">
           <span style="font-size:14px;color:var(--text)">${esc(opt)}</span>
         </label>`;
       });
@@ -710,15 +721,15 @@
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:${probe ? '10px' : '0'}">
           <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${stateColour}"></span>
           <span style="font-size:14px;font-weight:600;flex:1">${esc(topic.name)}</span>
-          <button class="btn btn-outline btn-sm" ${isValidating ? 'disabled' : ''} onclick="window._briefReviewTopic('${esc(topic.id)}')">${isValidating ? 'Checking…' : (probe ? 'Re-review' : 'Review')}</button>
+          <button class="btn btn-outline btn-sm" ${isValidating ? 'disabled' : ''} onclick="window._briefReviewTopic('${escAttr(topic.id)}')">${isValidating ? 'Checking…' : (probe ? 'Re-review' : 'Review')}</button>
         </div>`;
       if (probe && probe.suggestion) {
         html += `<div style="background:var(--surface2);border-left:3px solid var(--accent);padding:10px 12px;border-radius:0 4px 4px 0">
           <div style="font-size:13px;color:var(--accent);margin-bottom:4px;font-weight:600">Suggestion</div>
           <p style="font-size:13px;margin:0 0 10px">${esc(probe.suggestion)}</p>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-gold btn-sm" onclick="window._briefUseTopicSuggestion('${esc(topic.id)}')">Use this suggestion</button>
-            <button class="btn btn-outline btn-sm" onclick="window._briefDismissTopicProbe('${esc(topic.id)}')">Ignore this line of thought</button>
+            <button class="btn btn-gold btn-sm" onclick="window._briefUseTopicSuggestion('${escAttr(topic.id)}')">Use this suggestion</button>
+            <button class="btn btn-outline btn-sm" onclick="window._briefDismissTopicProbe('${escAttr(topic.id)}')">Ignore this line of thought</button>
           </div>
         </div>`;
       } else if (probe && probe.question) {
@@ -729,13 +740,13 @@
         (probe.options || []).forEach(opt => {
           const sel = picks.has(opt);
           const cls = sel ? 'btn btn-gold btn-sm' : 'btn btn-outline btn-sm';
-          html += `<button class="${cls}" onclick="window._briefToggleTopicOption('${esc(topic.id)}','${esc(opt)}')">${sel ? '&#10003; ' : ''}${esc(opt)}</button>`;
+          html += `<button class="${cls}" onclick="window._briefToggleTopicOption('${escAttr(topic.id)}','${escAttr(opt)}')">${sel ? '&#10003; ' : ''}${esc(opt)}</button>`;
         });
         html += `</div>
-          <input type="text" id="topic-free-${esc(topic.id)}" style="width:100%;margin-bottom:8px" placeholder="${esc(probe.free_text_placeholder || 'Or add in your own words…')}">
+          <input type="text" id="topic-free-${escAttr(topic.id)}" style="width:100%;margin-bottom:8px" placeholder="${escAttr(probe.free_text_placeholder || 'Or add in your own words…')}">
           <div style="display:flex;gap:8px">
-            <button class="btn btn-gold btn-sm" onclick="window._briefSubmitTopicAnswer('${esc(topic.id)}')">Submit answer</button>
-            <button class="btn btn-outline btn-sm" onclick="window._briefDismissTopicProbe('${esc(topic.id)}')">Ignore this line of thought</button>
+            <button class="btn btn-gold btn-sm" onclick="window._briefSubmitTopicAnswer('${escAttr(topic.id)}')">Submit answer</button>
+            <button class="btn btn-outline btn-sm" onclick="window._briefDismissTopicProbe('${escAttr(topic.id)}')">Ignore this line of thought</button>
           </div>
         </div>`;
       } else if (entry.rubric_unavailable) {
