@@ -48,10 +48,11 @@ function renderDashContent(prompts, briefs) {
       const qualityLabel = b.quality_score >= 80 ? 'Gold standard' : b.quality_score >= 60 ? 'Strong' : b.quality_score >= 40 ? 'Reasonable' : 'Weak';
       const dots = Array.from({length: 6}, (_, i) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${i < b.step_progress ? 'var(--accent)' : 'var(--border)'}"></span>`).join('');
       const ownerLine = b.business_owner_name ? esc(b.business_owner_name) + (b.business_owner_role ? ', ' + esc(b.business_owner_role) : '') : '—';
-      html += `<div class="card" style="cursor:pointer;border:1px dashed #252535;transition:border-color .15s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='#252535'" onclick="navigate('brief',{briefId:'${b.brief_id}'})">
+      html += `<div class="card" style="position:relative;cursor:pointer;border:1px dashed #252535;transition:border-color .15s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='#252535'" onclick="navigate('brief',{briefId:'${b.brief_id}'})">
+        <a style="position:absolute;top:8px;right:10px;font-size:18px;line-height:1;color:var(--text2);cursor:pointer;padding:2px 6px" title="Delete brief" onclick="event.stopPropagation();window._dashConfirmDelete('${b.brief_id}','${esc((title || '').replace(/'/g, '\\\''))}')">&times;</a>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <span class="badge badge-purple" style="font-size:11px">IN BRIEF</span>
-          <span style="display:flex;align-items:center;gap:4px">${dots}<span class="mono" style="font-size:11px;color:var(--text2);margin-left:4px">Step ${b.step_progress}/6</span></span>
+          <span style="display:flex;align-items:center;gap:4px">${dots}<span class="mono" style="font-size:11px;color:var(--text2);margin-left:4px">Step ${b.step_progress}/5</span></span>
         </div>
         <h3 style="font-size:16px;margin-bottom:10px">${esc(title)}</h3>
         <div style="font-size:13px;color:var(--text2);line-height:1.8">
@@ -97,3 +98,33 @@ function renderDashContent(prompts, briefs) {
   }
   container.innerHTML = html;
 }
+
+window._dashConfirmDelete = function (briefId, title) {
+  const backdrop = document.createElement('div');
+  backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:center;justify-content:center';
+  backdrop.innerHTML = `
+    <div class="card" style="max-width:420px;margin:0">
+      <h3 style="margin-bottom:10px">Delete this brief?</h3>
+      <p style="color:var(--text2);font-size:14px;margin-bottom:6px">${esc(title || 'Untitled')}</p>
+      <p style="color:var(--text2);font-size:13px;margin-bottom:18px">This cannot be undone.</p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" id="_dash-delete-cancel">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="_dash-delete-confirm">Delete</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+  document.getElementById('_dash-delete-cancel').addEventListener('click', close);
+  document.getElementById('_dash-delete-confirm').addEventListener('click', async () => {
+    try {
+      await api('/briefs/' + briefId, { method: 'DELETE' });
+      toast('Brief deleted');
+      close();
+      navigate('dashboard');
+    } catch (e) {
+      toast(e.message || 'Delete failed', 'error');
+      close();
+    }
+  });
+};

@@ -205,6 +205,49 @@ def complete_brief(
     return BriefOut.model_validate(brief)
 
 
+@router.delete("/{brief_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_brief(
+    brief_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Hard-delete a brief.
+
+    Authorisation:
+      - Maker: may delete own brief iff status == "In Progress" (drafts only).
+      - Checker / Admin: may delete any brief regardless of owner or status.
+
+    Hard delete, not soft: no table references Brief as an FK source, and
+    AuditLog.entity_id is a plain string so the audit record survives the
+    row's removal. The BriefDeleted audit entry is written before the
+    db.delete() so the trail captures title + prior status at the moment
+    of removal.
+    """
+    brief = db.query(Brief).filter(Brief.brief_id == brief_id).first()
+    if not brief:
+        raise HTTPException(status_code=404, detail="Brief not found")
+
+    role = current_user.role
+    is_owner = brief.brief_builder_id == current_user.user_id
+    if role == "Maker":
+        if not is_owner:
+            raise HTTPException(status_code=403, detail="Maker may only delete own briefs")
+        if brief.status != "In Progress":
+            raise HTTPException(status_code=403, detail="Maker may only delete draft briefs")
+    elif role not in ("Checker", "Admin"):
+        raise HTTPException(status_code=403, detail="Role not permitted to delete briefs")
+
+    db.add(AuditLog(
+        user_id=current_user.user_id,
+        action="BriefDeleted",
+        entity_type="Brief",
+        entity_id=brief.brief_id,
+        detail=json.dumps({"title": brief.title, "prior_status": brief.status}),
+    ))
+    db.delete(brief)
+    db.commit()
+
+
 @router.post("/{brief_id}/abandon", response_model=BriefOut)
 def abandon_brief(
     brief_id: str,

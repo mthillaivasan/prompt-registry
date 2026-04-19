@@ -229,7 +229,7 @@ CREATE TABLE audit_log (
         'ValidationFailed','Accessed','PromptImported','UpgradeProposed',
         'UpgradeResponseRecorded','UpgradeApplied','UpgradeAbandoned',
         'ClassificationOverridden','PromptGenerated',
-        'BriefCreated','BriefUpdated','BriefAbandoned','BriefCompleted',
+        'BriefCreated','BriefUpdated','BriefDeleted','BriefAbandoned','BriefCompleted',
         'BriefStepSkipped','BriefQuestionSkipped','BriefTrackAbandoned',
         'TokenRefreshed')),
     CONSTRAINT ck_al_entity_type CHECK (entity_type IN (

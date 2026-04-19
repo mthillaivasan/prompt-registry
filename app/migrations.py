@@ -84,6 +84,24 @@ def run_migrations(engine) -> None:
         _add_column(conn, "prompts", "ai_platform", "VARCHAR", is_sqlite)
         _add_column(conn, "prompts", "output_destination", "VARCHAR", is_sqlite)
 
+        # Phase B2: expand audit_log action CHECK constraint to admit 'BriefDeleted'.
+        # SQLite can't ALTER a CHECK constraint — fresh test DBs pick up the new
+        # constraint from models.py via create_all. Postgres runtime needs the
+        # drop+recreate below to accept the new action value.
+        if not is_sqlite:
+            conn.execute(text("ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS ck_al_action"))
+            conn.execute(text(
+                "ALTER TABLE audit_log ADD CONSTRAINT ck_al_action CHECK (action IN ("
+                "'Created','Edited','Activated','Retired','ComplianceChecked',"
+                "'Approved','DefectLogged','Corrected','InjectionDetected',"
+                "'ValidationFailed','Accessed','PromptImported','UpgradeProposed',"
+                "'UpgradeResponseRecorded','UpgradeApplied','UpgradeAbandoned',"
+                "'ClassificationOverridden','PromptGenerated',"
+                "'BriefCreated','BriefUpdated','BriefDeleted','BriefAbandoned','BriefCompleted',"
+                "'BriefStepSkipped','BriefQuestionSkipped','BriefTrackAbandoned',"
+                "'TokenRefreshed'))"
+            ))
+
         conn.commit()
     print("Migration check complete")
 
