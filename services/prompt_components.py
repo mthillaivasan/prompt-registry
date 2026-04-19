@@ -8,6 +8,19 @@ Each component has:
   - text: the actual prompt text to inject
 """
 
+
+def _build_content_type_map(db) -> dict[str, str]:
+    """Return {dim_code: content_type} for all active scoring_dimensions.
+
+    Used by assemble_template to filter REGULATORY_COMPONENTS entries whose
+    corresponding dimension is wrapper_metadata or registry_policy. Lazy
+    import of ScoringDimension to avoid a circular dependency between
+    services and app.models.
+    """
+    from app.models import ScoringDimension
+    rows = db.query(ScoringDimension.code, ScoringDimension.content_type).all()
+    return {row.code: row.content_type for row in rows if row.content_type}
+
 INPUT_HANDLERS = {
     "Document or report": {
         "code": "COMP-IN-01",
@@ -453,12 +466,24 @@ REGULATORY_COMPONENTS = {
 }
 
 
-def get_regulatory_components(dimension_codes: list[str]) -> list[dict]:
-    return [REGULATORY_COMPONENTS[code] for code in dimension_codes if code in REGULATORY_COMPONENTS]
+def get_regulatory_components(dimension_codes: list[str], content_type_map: dict[str, str] | None = None) -> list[dict]:
+    # Drop 3 Item 3 path #2 filter: if content_type_map is provided, skip codes
+    # whose corresponding dimension is wrapper_metadata or registry_policy.
+    # NULL / missing entries treated as prompt_content for backward compat.
+    out = []
+    for code in dimension_codes:
+        if code not in REGULATORY_COMPONENTS:
+            continue
+        if content_type_map is not None:
+            ct = content_type_map.get(code)
+            if ct and ct != "prompt_content":
+                continue
+        out.append(REGULATORY_COMPONENTS[code])
+    return out
 
 
-def get_regulatory_text(dimension_codes: list[str]) -> str:
-    components = get_regulatory_components(dimension_codes)
+def get_regulatory_text(dimension_codes: list[str], content_type_map: dict[str, str] | None = None) -> str:
+    components = get_regulatory_components(dimension_codes, content_type_map)
     if not components:
         return ""
     return "\n\n".join(c["text"] for c in components)
@@ -711,15 +736,24 @@ def get_template(prompt_type: str) -> dict | None:
     return TEMPLATES.get(prompt_type)
 
 
-def assemble_template(prompt_type: str, constraints: list[str] | None = None) -> dict:
-    """Assemble all components for a given template. Returns component texts and metadata."""
+def assemble_template(prompt_type: str, constraints: list[str] | None = None, db=None) -> dict:
+    """Assemble all components for a given template. Returns component texts and metadata.
+
+    Optional `db` session enables the Drop-3-Item-3 content_type filter: when
+    provided, REGULATORY_COMPONENTS entries whose corresponding dimension is
+    wrapper_metadata or registry_policy are skipped at render time. Without db,
+    all entries render — preserves existing test mock patterns that don't
+    inject a DB session.
+    """
     template = TEMPLATES.get(prompt_type)
     if not template:
         return {"input": get_input_handler_text("Free text"), "output": get_output_handler_text(""), "regulatory": "", "behaviour": get_behaviour_text(constraints), "example": None}
 
+    content_type_map = _build_content_type_map(db) if db is not None else None
+
     input_text = get_input_handler_text(template["input_handler"])
     output_text = get_output_handler_text(template["output_handler"])
-    reg_text = get_regulatory_text(template["regulatory_codes"])
+    reg_text = get_regulatory_text(template["regulatory_codes"], content_type_map)
 
     # Behaviour: template-specified codes + constraint-triggered
     beh_codes = set(template["behaviour_codes"])

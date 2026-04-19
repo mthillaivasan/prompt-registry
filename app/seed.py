@@ -25,6 +25,31 @@ def _utcnow() -> str:
 
 # ── Scoring dimensions ────────────────────────────────────────────────────────
 
+# Drop 3 Item 3: three-category classification for generator filtering.
+# prompt_content = injected into the generated prompt body.
+# wrapper_metadata = registry-side context about the prompt (owner, reviewer, cadence).
+# registry_policy = registry-side rules (decommission trigger, audit programmes).
+# See docs/CHECKLIST_DESIGN.md follow-up for the classification reasoning.
+_CONTENT_TYPES_BY_CODE = {
+    "REG_D1":          "wrapper_metadata",
+    "REG_D2":          "prompt_content",
+    "REG_D3":          "prompt_content",
+    "REG_D4":          "wrapper_metadata",
+    "REG_D5":          "wrapper_metadata",
+    "REG_D6":          "registry_policy",
+    "OWASP_LLM01":     "prompt_content",
+    "OWASP_LLM02":     "prompt_content",
+    "OWASP_LLM06":     "prompt_content",
+    "OWASP_LLM08":     "prompt_content",
+    "OWASP_LLM09":     "prompt_content",
+    "NIST_GOVERN_1":   "wrapper_metadata",
+    "NIST_MAP_1":      "wrapper_metadata",
+    "NIST_MEASURE_1":  "registry_policy",
+    "NIST_MANAGE_1":   "registry_policy",
+    "ISO42001_6_1":    "registry_policy",
+    "ISO42001_8_4":    "registry_policy",
+}
+
 _REG_D2_INSTRUCTIONAL_TEXT = (
     "Always end your output with a section titled AUDIT. Inside the AUDIT "
     "section, render each audit field provided to you on its own line, in "
@@ -357,6 +382,7 @@ def _seed_dimensions(db: Session) -> None:
             db.add(ScoringDimension(dimension_id=_uuid(), **d))
         db.commit()
     _sync_instructional_text(db)
+    _sync_content_types(db)
 
 
 def _sync_instructional_text(db: Session) -> None:
@@ -365,6 +391,19 @@ def _sync_instructional_text(db: Session) -> None:
     row = db.query(ScoringDimension).filter_by(code="REG_D2").first()
     if row and row.instructional_text != _REG_D2_INSTRUCTIONAL_TEXT:
         row.instructional_text = _REG_D2_INSTRUCTIONAL_TEXT
+        db.commit()
+
+
+def _sync_content_types(db: Session) -> None:
+    # Idempotent classification sync — runs every startup, updates rows whose
+    # content_type differs from the map. Same pattern as _sync_instructional_text.
+    changed = False
+    for code, content_type in _CONTENT_TYPES_BY_CODE.items():
+        row = db.query(ScoringDimension).filter_by(code=code).first()
+        if row and row.content_type != content_type:
+            row.content_type = content_type
+            changed = True
+    if changed:
         db.commit()
 
 

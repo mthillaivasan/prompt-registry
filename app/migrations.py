@@ -23,6 +23,8 @@ def run_migrations(engine) -> None:
         _add_column(conn, "scoring_dimensions", "instructional_text", "TEXT", is_sqlite)
         _add_column(conn, "scoring_dimensions", "updated_at", "VARCHAR", is_sqlite)
         _add_column(conn, "scoring_dimensions", "updated_by", "VARCHAR(36)", is_sqlite)
+        # Drop 3 Item 3: three-category classification for generator filtering.
+        _add_column(conn, "scoring_dimensions", "content_type", "VARCHAR", is_sqlite)
 
         _create_table_if_not_exists(conn, "briefs", """
             brief_id VARCHAR(36) PRIMARY KEY,

@@ -493,15 +493,24 @@ def generate_prompt_text(
     from services.prompt_components import assemble_template, get_input_handler_text, get_output_handler_text, get_regulatory_text, get_behaviour_text
 
     selected_dims = resolve_guardrails(body, db)
+    # Three-category filter: only prompt_content dims render into the generated
+    # prompt. wrapper_metadata and registry_policy are captured in the DB but
+    # excluded from the prompt body. NULL content_type treated as prompt_content
+    # for backward compat during the migration window.
+    prompt_content_dims = [
+        d for d in selected_dims
+        if not d.content_type or d.content_type == "prompt_content"
+    ]
     guardrail_block = "\n".join(
         d.instructional_text if d.instructional_text
         else f"- {d.code} ({d.name}): {d.description}"
-        for d in selected_dims
+        for d in prompt_content_dims
     )
     system_prompt = _GENERATE_SYSTEM_PROMPT_TEMPLATE.replace("{guardrail_block}", guardrail_block)
 
-    # Assemble components from template if available, otherwise from selections
-    assembled = assemble_template(body.prompt_type, body.constraints)
+    # Assemble components from template if available, otherwise from selections.
+    # Passing db enables path #2 content_type filtering on REGULATORY_COMPONENTS.
+    assembled = assemble_template(body.prompt_type, body.constraints, db=db)
 
     brief_parts = [f"Title: {body.title}", f"Prompt type: {body.prompt_type}"]
     if body.deployment_target:

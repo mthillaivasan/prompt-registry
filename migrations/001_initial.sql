@@ -49,6 +49,7 @@ CREATE TABLE scoring_dimensions (
     tier                INTEGER NOT NULL DEFAULT 3,
     tier2_trigger       TEXT,
     instructional_text  TEXT,
+    content_type        TEXT,
     updated_at          TEXT,
     updated_by          TEXT REFERENCES users(user_id),
 
@@ -57,7 +58,9 @@ CREATE TABLE scoring_dimensions (
     CONSTRAINT ck_sd_scoring_type
         CHECK (scoring_type IN ('Blocking','Advisory','Maturity','Alignment')),
     CONSTRAINT ck_sd_tier
-        CHECK (tier IN (1, 2, 3))
+        CHECK (tier IN (1, 2, 3)),
+    CONSTRAINT ck_sd_content_type
+        CHECK (content_type IS NULL OR content_type IN ('prompt_content','wrapper_metadata','registry_policy'))
 );
 
 -- ── injection_patterns ────────────────────────────────────────────────────────

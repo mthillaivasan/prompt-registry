@@ -66,6 +66,13 @@ class ScoringDimension(Base):
     tier = Column(Integer, nullable=False, default=3)  # 1=always, 2=conditional, 3=optional
     tier2_trigger = Column(Text, nullable=True)  # JSON: condition description for tier 2
     instructional_text = Column(Text, nullable=True)
+    # Three-category architecture: prompt_content dims are injected into the
+    # generated prompt; wrapper_metadata and registry_policy are captured for
+    # display/enforcement elsewhere but excluded from the prompt body.
+    # See docs/CHECKLIST_DESIGN.md (not yet authored); classification map in
+    # app/seed.py _CONTENT_TYPES_BY_CODE. NULL = treat as prompt_content for
+    # backward compat during migration window.
+    content_type = Column(String, nullable=True)
     updated_at = Column(String, nullable=True)
     updated_by = Column(String(36), ForeignKey("users.user_id"), nullable=True)
 
@@ -77,6 +84,10 @@ class ScoringDimension(Base):
         CheckConstraint(
             "scoring_type IN ('Blocking','Advisory','Maturity','Alignment')",
             name="ck_sd_scoring_type",
+        ),
+        CheckConstraint(
+            "content_type IS NULL OR content_type IN ('prompt_content','wrapper_metadata','registry_policy')",
+            name="ck_sd_content_type",
         ),
         CheckConstraint(
             "tier IN (1, 2, 3)",

@@ -330,3 +330,17 @@ Observation from 19 April B1 smoke testing: briefs accumulate on the dashboard w
 Needed: DELETE /briefs/{id} endpoint (with appropriate authorisation — Maker can delete own drafts; Checker/Admin can delete any), dashboard UI with confirmation, cascade behaviour for briefs referenced by prompts (soft-delete vs hard-delete decision).
 
 Estimate: 1-2 hours. Priority: medium. Does not block functional flow but degrades day-to-day usability.
+
+### Wrapper-metadata and registry-policy surfacing (follow-up to Drop 3 Item 3)
+
+Drop 3 Item 3 classified each scoring_dimension as prompt_content | wrapper_metadata | registry_policy and filtered the generator to only inject prompt_content dims. The wrapper_metadata and registry_policy dims are captured in the DB but not yet surfaced anywhere in the UI.
+
+Needed:
+1. **Wrapper-metadata panel on prompt detail / review page.** Render wrapper_metadata dims (REG_D1 Human Oversight, REG_D4 Audit Trail, REG_D5 Operational Resilience, NIST_GOVERN_1 Governance Accountability, NIST_MAP_1 Context and Limitations) as a "Governance context" section alongside the prompt — not inside the prompt body. Fields: accountable reviewer, named oversight mechanism, audit trail format, manual fallback description, limitations and in-scope/out-of-scope use cases.
+2. **Registry-policy surfacing.** REG_D6 Outsourcing, NIST_MEASURE_1 Output Quality Measurement, NIST_MANAGE_1 Decommission Trigger, ISO42001_6_1 Risk Assessment, ISO42001_8_4 Data Quality and Bias. These are registry-side rules, not display strings. Surfacing = enforcement: decommission trigger fires review cadence, measurement programmes schedule compliance re-scores, etc. Separate larger piece of work.
+
+Classification preserved in `app/seed.py` `_CONTENT_TYPES_BY_CODE` and synced on startup via `_sync_content_types`.
+
+Estimate: 2-3 hours for wrapper-metadata panel (UI + read-only rendering). Registry-policy enforcement is a separate multi-session arc.
+
+If SIT later reveals a source-citation gap because REG_D4 was classified wrapper_metadata, revisit the classification — the "document reasoning" portion of REG_D4 was borderline prompt_content and was placed wrapper per the dominant-content heuristic.

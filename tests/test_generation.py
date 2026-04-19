@@ -100,8 +100,35 @@ def test_dimension_with_instructional_text_renders_clean(client, auth_headers):
 
 
 def test_dimension_without_instructional_text_uses_fallback_format(client, auth_headers):
-    """REG_D1 has no instructional_text — the guardrail block must fall back
-    to the legacy '- {code} ({name}): {description}' format."""
+    """REG_D3 (prompt_content, no instructional_text) — the guardrail block
+    must fall back to the legacy '- {code} ({name}): {description}' format.
+
+    Previously exercised REG_D1; switched to REG_D3 after Drop 3 Item 3
+    classified REG_D1 as wrapper_metadata (now filtered out of the prompt).
+    """
+    mock_client = _mock_claude_returning("body")
+
+    with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
+        resp = client.post(
+            "/prompts/generate",
+            json={
+                "title": "X",
+                "prompt_type": "Summarisation",
+                "selected_guardrails": ["REG_D3"],
+            },
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200, resp.text
+    sent_system = mock_client.messages.create.call_args.kwargs["system"]
+    assert "- REG_D3 (Data Minimisation):" in sent_system
+
+
+# ── Drop 3 Item 3: content_type filter on generator output ───────────────────
+
+def test_wrapper_metadata_dim_excluded_from_prompt(client, auth_headers):
+    """REG_D1 is classified wrapper_metadata — it must NOT render into the
+    generated prompt. Path #1 (dimension guardrail_block) filters it out."""
     mock_client = _mock_claude_returning("body")
 
     with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
@@ -117,4 +144,72 @@ def test_dimension_without_instructional_text_uses_fallback_format(client, auth_
 
     assert resp.status_code == 200, resp.text
     sent_system = mock_client.messages.create.call_args.kwargs["system"]
-    assert "- REG_D1 (Human Oversight):" in sent_system
+    assert "REG_D1" not in sent_system
+    assert "Human Oversight" not in sent_system
+
+
+def test_registry_policy_dim_excluded_from_prompt(client, auth_headers):
+    """REG_D6 is classified registry_policy — it must NOT render into the
+    generated prompt."""
+    mock_client = _mock_claude_returning("body")
+
+    with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
+        resp = client.post(
+            "/prompts/generate",
+            json={
+                "title": "X",
+                "prompt_type": "Summarisation",
+                "selected_guardrails": ["REG_D6"],
+            },
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200, resp.text
+    sent_system = mock_client.messages.create.call_args.kwargs["system"]
+    assert "REG_D6" not in sent_system
+    assert "Outsourcing" not in sent_system
+
+
+def test_mixed_selection_only_prompt_content_renders(client, auth_headers):
+    """REG_D2 (prompt_content, has instructional_text) + REG_D1 (wrapper).
+    Only REG_D2 content should reach the prompt."""
+    mock_client = _mock_claude_returning("body")
+
+    with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
+        resp = client.post(
+            "/prompts/generate",
+            json={
+                "title": "X",
+                "prompt_type": "Summarisation",
+                "selected_guardrails": ["REG_D2", "REG_D1"],
+            },
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200, resp.text
+    sent_system = mock_client.messages.create.call_args.kwargs["system"]
+    assert "AUDIT" in sent_system  # REG_D2 instructional_text
+    assert "REG_D1" not in sent_system
+    assert "Human Oversight" not in sent_system
+
+
+def test_reg_d3_prompt_content_renders_positive_case(client, auth_headers):
+    """Positive lock-in: REG_D3 (prompt_content, no instructional_text) must
+    render. Ensures the content_type filter isn't over-aggressive."""
+    mock_client = _mock_claude_returning("body")
+
+    with patch("app.routers.generation.anthropic.Anthropic", return_value=mock_client):
+        resp = client.post(
+            "/prompts/generate",
+            json={
+                "title": "X",
+                "prompt_type": "Summarisation",
+                "selected_guardrails": ["REG_D3"],
+            },
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200, resp.text
+    sent_system = mock_client.messages.create.call_args.kwargs["system"]
+    assert "REG_D3" in sent_system
+    assert "Data Minimisation" in sent_system
