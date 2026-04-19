@@ -49,7 +49,7 @@ function renderDashContent(prompts, briefs) {
       const dots = Array.from({length: 6}, (_, i) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${i < b.step_progress ? 'var(--accent)' : 'var(--border)'}"></span>`).join('');
       const ownerLine = b.business_owner_name ? esc(b.business_owner_name) + (b.business_owner_role ? ', ' + esc(b.business_owner_role) : '') : '—';
       html += `<div class="card" style="position:relative;cursor:pointer;border:1px dashed #252535;transition:border-color .15s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='#252535'" onclick="navigate('brief',{briefId:'${b.brief_id}'})">
-        <a style="position:absolute;top:8px;right:10px;font-size:18px;line-height:1;color:var(--text2);cursor:pointer;padding:2px 6px" title="Delete brief" onclick="event.stopPropagation();window._dashConfirmDelete('${b.brief_id}','${esc((title || '').replace(/'/g, '\\\''))}')">&times;</a>
+        <a style="position:absolute;top:8px;right:10px;font-size:18px;line-height:1;color:var(--text2);cursor:pointer;padding:2px 6px" title="Delete brief" data-brief-id="${b.brief_id}" data-title="${escAttr(title || '')}" onclick="event.stopPropagation();window._dashConfirmDelete(this.dataset.briefId,this.dataset.title)">&times;</a>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <span class="badge badge-purple" style="font-size:11px">IN BRIEF</span>
           <span style="display:flex;align-items:center;gap:4px">${dots}<span class="mono" style="font-size:11px;color:var(--text2);margin-left:4px">Step ${b.step_progress}/5</span></span>

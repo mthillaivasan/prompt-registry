@@ -235,6 +235,17 @@ function badgeFor(status) {
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
+// Attribute-safe escape. See brief.js convention comment near the local
+// copy of this function. Use for value="…" / placeholder="…" / id="…" /
+// data-* / other non-event attributes. Do NOT use to interpolate into
+// onclick="…" — use data-* + this.dataset.* instead (see convention).
+function escAttr(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function timeAgo(iso) {
   if (!iso) return '';
   const d = new Date(iso);

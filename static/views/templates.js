@@ -34,7 +34,7 @@ viewInits.templates = async function () {
           <div class="prompt-text" style="display:none;margin-top:8px;font-size:12px;max-height:200px">${esc(t.output_example)}</div>
         </div>`;
       }
-      html += `<button class="btn btn-gold btn-sm" style="width:100%;justify-content:center" onclick="window._useTemplate('${t.template_id}','${esc(t.code)}')">Use Template</button>
+      html += `<button class="btn btn-gold btn-sm" style="width:100%;justify-content:center" data-template-id="${escAttr(t.template_id)}" data-code="${escAttr(t.code)}" onclick="window._useTemplate(this.dataset.templateId,this.dataset.code)">Use Template</button>
       </div>`;
     });
     html += '</div>';
