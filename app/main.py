@@ -44,6 +44,7 @@ from app.routers import deployments as deployments_router
 from app.routers import generation as generation_router
 from app.routers import health as health_router
 from app.routers import library as library_router
+from app.routers import operations as operations_router
 from app.routers import prompts as prompts_router
 from app.routers import templates as templates_router
 from app.routers import upgrade as upgrade_router
@@ -118,6 +119,7 @@ app.include_router(health_router.router)
 app.include_router(briefs_router.router)
 app.include_router(compliance_router.router)
 app.include_router(deployments_router.router)
+app.include_router(operations_router.router)
 app.include_router(prompts_router.router)
 app.include_router(generation_router.router)
 app.include_router(templates_router.router)

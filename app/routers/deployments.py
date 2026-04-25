@@ -44,7 +44,7 @@ from app.models import (
     Standard,
     User,
 )
-from services import deployment_compliance, form_validation
+from services import deployment_compliance, form_validation, operation_lifecycle
 
 router = APIRouter(tags=["deployments"])
 
@@ -539,6 +539,12 @@ def decide_deployment_gate(
 
     rec.status = decision  # 'Approved' or 'Rejected' — both valid record statuses
     rec.updated_at = _utcnow()
+
+    # Block 18 hook: an Approved deployment opens an Operation record so
+    # every deployed prompt has a live Operation entry from the moment
+    # of approval. Idempotent.
+    if decision == "Approved":
+        operation_lifecycle.create_operation_record_for_deployment(db, rec)
 
     db.add(AuditLog(
         user_id=current_user.user_id,

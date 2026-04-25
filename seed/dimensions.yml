@@ -588,3 +588,59 @@ dimensions:
         Personal data flows to the model without legal basis,
         redaction, or residency declaration.
     instructional_text: null
+
+  # -------------------------------------------------------------------------
+  # Operation-phase dimensions (Block 18) — continuous surveillance.
+  # The engine scores against the operation_record state plus aggregated
+  # incident telemetry. No incident detail is fed to the scoring model;
+  # counts and severities are sufficient for the Phase 2 cut.
+  # -------------------------------------------------------------------------
+
+  - code: NIST_MEASURE_RUNTIME
+    title: Output quality measurement is operating as declared
+    phase: operation
+    standard_code: NIST_AI_RMF
+    clause: MEASURE 2.3 — system performance regularly evaluated
+    sort_order: 710
+    blocking_threshold: 2
+    is_mandatory: false
+    scoring_type: Advisory
+    content_type: registry_policy
+    applicability:
+      always: true
+    scoring_rubric:
+      score_5: |
+        Operation record shows quality measurement is running on
+        cadence, the metrics declared at Build are present in the
+        runtime telemetry, and the cadence has not slipped.
+      score_3: |
+        Measurement is running but cadence has slipped or one metric
+        is missing.
+      score_1: |
+        No measurement happening, or cadence is stale by more than the
+        review window.
+    instructional_text: null
+
+  - code: NIST_MANAGE_DECOMMISSION_RUNTIME
+    title: Decommission trigger conditions are not breached
+    phase: operation
+    standard_code: NIST_AI_RMF
+    clause: MANAGE 2.4 — supersede / deactivate / decommission
+    sort_order: 720
+    blocking_threshold: 2
+    is_mandatory: false
+    scoring_type: Advisory
+    content_type: registry_policy
+    applicability:
+      always: true
+    scoring_rubric:
+      score_5: |
+        No High or Critical incidents in the review window; the
+        cadence is current; the declared decommission trigger has
+        not fired.
+      score_3: |
+        One High incident OR cadence slipped by more than 14 days.
+      score_1: |
+        Critical incident in the review window, or cadence stale by
+        more than 60 days, or decommission trigger fired.
+    instructional_text: null
