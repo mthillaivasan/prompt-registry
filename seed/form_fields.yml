@@ -1,0 +1,218 @@
+# Deployment form fields, expressed as data.
+#
+# Form_code = 'deployment_form'. Block 13's renderer reads from this table
+# and assembles the form. Adding, removing, or reordering a field is a
+# YAML edit + reseed; no UI code change.
+#
+# field_type values supported by the renderer:
+#   text, textarea, select, multiselect, boolean
+#
+# options: array of allowed values for select/multiselect.
+# validation: JSON object with shape supported by the validator.
+
+form_fields:
+
+  # 1. Invocation context
+  - form_code: deployment_form
+    field_code: invocation_trigger
+    label: How is the prompt invoked
+    help_text: |
+      What triggers a call to the model. Choose the dominant pathway;
+      if multiple apply, choose the highest-frequency one and describe
+      others in change-management notes.
+    field_type: select
+    options:
+      - manual_user_action
+      - scheduled_job
+      - event_driven
+      - api_callout
+      - agent_chain
+    validation: {required: true}
+    sort_order: 110
+
+  - form_code: deployment_form
+    field_code: invocation_frequency_per_day
+    label: Expected invocations per day
+    field_type: select
+    options: ["<1", "1-10", "10-100", "100-1000", ">1000"]
+    validation: {required: true}
+    sort_order: 120
+
+  - form_code: deployment_form
+    field_code: latency_envelope_seconds
+    label: Latency envelope (seconds), if any
+    field_type: text
+    validation: {pattern: '^[0-9]*\\.?[0-9]*$'}
+    sort_order: 130
+
+  # 2. Input sources
+  - form_code: deployment_form
+    field_code: input_data_categories
+    label: Input data categories
+    help_text: |
+      Tick every category present in the input the model receives at runtime.
+    field_type: multiselect
+    options:
+      - personal_data
+      - client_confidential
+      - regulatory_filings
+      - internal_documentation
+      - public_information
+      - model_generated
+    validation: {required: true}
+    sort_order: 210
+
+  - form_code: deployment_form
+    field_code: input_redaction_applied
+    label: Is input redaction applied upstream of the model
+    field_type: boolean
+    validation: {required: true}
+    sort_order: 220
+
+  - form_code: deployment_form
+    field_code: input_size_p95_tokens
+    label: Typical input size (P95 tokens)
+    field_type: text
+    validation: {pattern: '^[0-9]*$'}
+    sort_order: 230
+
+  - form_code: deployment_form
+    field_code: input_user_supplied
+    label: Is any portion of the input user-supplied
+    field_type: boolean
+    validation: {required: true}
+    sort_order: 240
+
+  # 3. Output handling
+  - form_code: deployment_form
+    field_code: output_destination
+    label: Where does the output go
+    field_type: select
+    options:
+      - human_review_only
+      - report_render
+      - automated_action
+      - feed_into_downstream_llm
+      - stored_no_display
+    validation: {required: true}
+    sort_order: 310
+
+  - form_code: deployment_form
+    field_code: output_executed_by_machine
+    label: Is any portion of the output parsed and acted on without human review
+    field_type: boolean
+    validation: {required: true}
+    sort_order: 320
+
+  - form_code: deployment_form
+    field_code: output_storage_retention_days
+    label: Output retention (days). Blank if not stored.
+    field_type: text
+    validation: {pattern: '^[0-9]*$'}
+    sort_order: 330
+
+  # 4. Monitoring
+  - form_code: deployment_form
+    field_code: logging_destination
+    label: Where are runtime events logged
+    field_type: select
+    options:
+      - application_logs
+      - audit_log_table
+      - siem
+      - none
+    validation: {required: true}
+    sort_order: 410
+
+  - form_code: deployment_form
+    field_code: metric_collection
+    label: Which metrics are collected
+    field_type: multiselect
+    options:
+      - latency
+      - token_count
+      - error_rate
+      - output_quality_sample
+      - none
+    validation: {required: true}
+    sort_order: 420
+
+  - form_code: deployment_form
+    field_code: alerting_thresholds_defined
+    label: Are alerting thresholds defined for any metric
+    field_type: boolean
+    validation: {required: true}
+    sort_order: 430
+
+  # 5. Ownership
+  - form_code: deployment_form
+    field_code: runtime_owner_id
+    label: Runtime owner (user)
+    help_text: User responsible for the deployed prompt at runtime.
+    field_type: select
+    options: []   # populated server-side from users table
+    validation: {required: true}
+    sort_order: 510
+
+  - form_code: deployment_form
+    field_code: approver_id
+    label: Deployment approver (user, Checker or Admin)
+    field_type: select
+    options: []
+    validation: {required: true}
+    sort_order: 520
+
+  - form_code: deployment_form
+    field_code: change_review_frequency_days
+    label: Change review frequency (days)
+    field_type: text
+    validation: {required: true, pattern: '^[0-9]+$'}
+    sort_order: 530
+
+  - form_code: deployment_form
+    field_code: breaking_change_protocol
+    label: Breaking change protocol
+    field_type: textarea
+    sort_order: 540
+
+  # 6. Outsourcing / residency
+  - form_code: deployment_form
+    field_code: model_provider
+    label: Model provider
+    field_type: select
+    options:
+      - Anthropic
+      - OpenAI
+      - Azure_OpenAI
+      - Vertex
+      - internal_model
+      - other
+    validation: {required: true}
+    sort_order: 610
+
+  - form_code: deployment_form
+    field_code: data_residency
+    label: Data residency
+    field_type: select
+    options:
+      - UK
+      - EEA
+      - US
+      - mixed
+      - unknown
+    validation: {required: true}
+    sort_order: 620
+
+  - form_code: deployment_form
+    field_code: sub_processing_disclosed
+    label: Sub-processing fully disclosed
+    field_type: boolean
+    validation: {required: true}
+    sort_order: 630
+
+  - form_code: deployment_form
+    field_code: audit_rights_in_contract
+    label: Third-party audit rights granted in contract
+    field_type: boolean
+    validation: {required: true}
+    sort_order: 640
