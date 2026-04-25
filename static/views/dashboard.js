@@ -1,11 +1,41 @@
 let _dashFilter = 'all'; // all | prompts | briefs
 
+const DASH_STATE_COLOUR = {
+  'In progress': 'badge-blue',
+  'Complete':    'badge-green',
+  'Pass':        'badge-green',
+  'PWW':         'badge-amber',
+  'Fail':        'badge-red',
+  'Pending':     'badge-amber',
+  'Approved':    'badge-green',
+  'Rejected':    'badge-red',
+  'Active':      'badge-green',
+  'Under Review':'badge-amber',
+  'Suspended':   'badge-red',
+  'Retired':     'badge-grey',
+  '—':           '',
+};
+
+function dashCellHtml(cell) {
+  if (!cell) return '<span style="color:var(--text2)">—</span>';
+  const cls = DASH_STATE_COLOUR[cell.state] || '';
+  if (cell.state === '—') return '<span style="color:var(--text2)">—</span>';
+  return `<span class="badge ${cls}">${esc(cell.label || cell.state)}</span>`;
+}
+
+function dashGateMarker(gate) {
+  if (!gate) return '';
+  const t = (gate.rationale || '').replace(/"/g, '&quot;');
+  return `<span title="Approved at ${esc(gate.decided_at || '')}: ${t}" style="color:var(--green);margin:0 4px">✓</span>`;
+}
+
 viewInits.dashboard = async function () {
   const el = document.getElementById('view-dashboard');
   el.innerHTML = '<div class="loading-state"><div class="spinner"></div> Loading...</div>';
   try {
-    const [prompts, briefs] = await Promise.all([api('/prompts'), api('/briefs')]);
+    const [dash, briefs] = await Promise.all([api('/dashboard?owner=me'), api('/briefs')]);
     const inProgressBriefs = briefs.filter(b => b.status === 'In Progress');
+    const rows = dash.prompts || [];
 
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
@@ -18,12 +48,12 @@ viewInits.dashboard = async function () {
       </div>
       <div style="display:flex;gap:8px;margin-bottom:16px">
         <button class="btn ${_dashFilter==='all'?'btn-primary':'btn-outline'} btn-sm" onclick="window._dashSetFilter('all')">All</button>
-        <button class="btn ${_dashFilter==='prompts'?'btn-primary':'btn-outline'} btn-sm" onclick="window._dashSetFilter('prompts')">Prompts (${prompts.length})</button>
+        <button class="btn ${_dashFilter==='prompts'?'btn-primary':'btn-outline'} btn-sm" onclick="window._dashSetFilter('prompts')">Prompts (${rows.length})</button>
         <button class="btn ${_dashFilter==='briefs'?'btn-primary':'btn-outline'} btn-sm" onclick="window._dashSetFilter('briefs')">Briefs (${inProgressBriefs.length})</button>
       </div>
       <div id="dash-content"></div>`;
 
-    renderDashContent(prompts, inProgressBriefs);
+    renderDashContent(rows, inProgressBriefs);
   } catch (err) {
     console.error('Dashboard load error:', err);
     el.innerHTML = '<div class="empty-state"><h3>Error loading</h3><p style="color:var(--red)">' + esc(err.message) + '</p></div>';
@@ -32,7 +62,7 @@ viewInits.dashboard = async function () {
 
 window._dashSetFilter = function (f) { _dashFilter = f; navigate('dashboard'); };
 
-function renderDashContent(prompts, briefs) {
+function renderDashContent(rows, briefs) {
   const container = document.getElementById('dash-content');
   if (!container) return;
   let html = '';
@@ -66,27 +96,24 @@ function renderDashContent(prompts, briefs) {
     html += '</div>';
   }
 
-  // Prompts section
+  // Lifecycle table — Brief / Build / Deployment / Operation
   if (_dashFilter !== 'briefs') {
-    if (prompts.length > 0) {
+    if (rows.length > 0) {
       html += '<div class="card" style="padding:0;overflow:hidden"><table><thead><tr>';
-      html += '<th></th><th>Title</th><th>Type</th><th>Risk Tier</th><th>Status</th><th>Updated</th><th></th>';
+      html += '<th>Prompt</th><th>Risk</th><th>Brief</th><th>Build</th><th></th><th>Deployment</th><th></th><th>Operation</th>';
       html += '</tr></thead><tbody>';
-      prompts.forEach(p => {
-        const riskClass = p.risk_tier === 'High' || p.risk_tier === 'Prohibited' ? 'badge-red'
-          : p.risk_tier === 'Limited' ? 'badge-amber' : 'badge-green';
-        const statusClass = p.status === 'Active' ? 'badge-green'
-          : p.status === 'Draft' ? 'badge-blue'
-          : p.status === 'Retired' ? 'badge-red' : 'badge-amber';
-        const pid = p.prompt_id;
-        html += `<tr style="cursor:pointer" onclick="navigate('detail',{promptId:'${pid}'})">
-          <td><span class="badge badge-purple">Prompt</span></td>
-          <td><strong>${esc(p.title)}</strong></td>
-          <td>${esc(p.prompt_type)}</td>
-          <td><span class="badge ${riskClass}">${esc(p.risk_tier)}</span></td>
-          <td><span class="badge ${statusClass}">${esc(p.status)}</span></td>
-          <td style="color:var(--text2)">${timeAgo(p.updated_at)}</td>
-          <td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();navigate('detail',{promptId:'${pid}'})">View</button></td>
+      rows.forEach(r => {
+        const riskClass = r.risk_tier === 'High' || r.risk_tier === 'Prohibited' ? 'badge-red'
+          : r.risk_tier === 'Limited' ? 'badge-amber' : 'badge-green';
+        html += `<tr style="cursor:pointer" onclick="navigate('detail',{promptId:'${r.prompt_id}'})">
+          <td><strong>${esc(r.title)}</strong><br><span style="color:var(--text2);font-size:12px">${esc(r.prompt_type)}</span></td>
+          <td><span class="badge ${riskClass}">${esc(r.risk_tier)}</span></td>
+          <td>${dashCellHtml(r.brief)}</td>
+          <td>${dashCellHtml(r.build)}</td>
+          <td style="text-align:center;width:24px">${dashGateMarker(r.build_gate)}</td>
+          <td>${dashCellHtml(r.deployment)}</td>
+          <td style="text-align:center;width:24px">${dashGateMarker(r.deployment_gate)}</td>
+          <td>${dashCellHtml(r.operation)}</td>
         </tr>`;
       });
       html += '</tbody></table></div>';
