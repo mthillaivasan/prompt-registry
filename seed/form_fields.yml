@@ -42,7 +42,7 @@ form_fields:
     field_code: latency_envelope_seconds
     label: Latency envelope (seconds), if any
     field_type: text
-    validation: {pattern: '^[0-9]*\\.?[0-9]*$'}
+    validation: {pattern: '^[0-9]*\.?[0-9]*$'}
     sort_order: 130
 
   # 2. Input sources
