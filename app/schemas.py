@@ -262,10 +262,22 @@ class ComplianceCheckRequest(BaseModel):
     force_refresh: bool = False
 
 
+class StandardLabel(BaseModel):
+    """Block 10: standards labelling for graded dimensions."""
+    standard_code: str
+    title: str
+    version: str
+    clause: str = ""
+
+
 class DimensionScoreOut(BaseModel):
     code: str
     score: int
     rationale: str
+    # Block 10: each scored dimension carries its standard label so the UI
+    # can render "OWASP LLM01 — Pass" rather than "D1 — Pass". Optional for
+    # backward compatibility with any caller that pre-dates the label join.
+    standard: StandardLabel | None = None
 
 
 class AnomalyOut(BaseModel):
