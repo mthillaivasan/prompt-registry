@@ -25,6 +25,7 @@ from app.database import Base, SessionLocal, engine
 from app.main import app
 from app.models import User
 from app.seed import run_seed
+from app.seed_phase2 import run_phase2_seed
 from app.triggers import create_triggers_and_indexes
 from services import injection_scanner
 
@@ -36,6 +37,7 @@ def fresh_database():
     Base.metadata.create_all(bind=engine)
     create_triggers_and_indexes(engine)
     run_seed()
+    run_phase2_seed()
     injection_scanner.clear_cache()
     yield
     injection_scanner.clear_cache()

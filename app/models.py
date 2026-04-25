@@ -447,3 +447,228 @@ class PromptLibrary(Base):
             name="ck_prompt_library_domain",
         ),
     )
+
+
+# ── Phase 2 schema (config-driven engine) ────────────────────────────────────
+#
+# Tables introduced by Block 7 of REFACTOR_PLAN.md / SCHEMA_V2.md.
+# Legacy ScoringDimension and ComplianceCheck remain. The engine in Block 9
+# reads from these new tables; the legacy tables stay populated as a
+# fallback read-path during the transition.
+
+
+class Standard(Base):
+    __tablename__ = "standards"
+
+    standard_id = Column(String(36), primary_key=True, default=_uuid)
+    standard_code = Column(String, unique=True, nullable=False)
+    title = Column(String, nullable=False)
+    version = Column(String, nullable=False)
+    publisher = Column(String, nullable=False)
+    url = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(String, nullable=False, default=_utcnow)
+    updated_at = Column(String, nullable=False, default=_utcnow)
+
+
+class Phase(Base):
+    __tablename__ = "phases"
+
+    phase_id = Column(String(36), primary_key=True, default=_uuid)
+    code = Column(String, unique=True, nullable=False)
+    title = Column(String, nullable=False)
+    purpose = Column(Text, nullable=False)
+    scoring_input = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    pass_threshold = Column(String, nullable=False, default="4.0")
+    pass_with_warnings_threshold = Column(String, nullable=False, default="3.0")
+    is_active = Column(Boolean, nullable=False, default=True)
+
+
+class PhaseWeight(Base):
+    __tablename__ = "phase_weights"
+
+    phase_weight_id = Column(String(36), primary_key=True, default=_uuid)
+    phase_id = Column(String(36), ForeignKey("phases.phase_id"), nullable=False)
+    standard_id = Column(String(36), ForeignKey("standards.standard_id"), nullable=False)
+    weight = Column(String, nullable=False, default="0.0")
+
+    __table_args__ = (
+        UniqueConstraint("phase_id", "standard_id", name="uq_pw_phase_standard"),
+    )
+
+
+class Dimension(Base):
+    """
+    Phase 2 dimension table. Distinct from legacy ScoringDimension.
+    The engine loops over this; it never references rows by `code` in code.
+    """
+    __tablename__ = "dimensions"
+
+    dimension_id = Column(String(36), primary_key=True, default=_uuid)
+    code = Column(String, unique=True, nullable=False)
+    title = Column(String, nullable=False)
+    phase_id = Column(String(36), ForeignKey("phases.phase_id"), nullable=False)
+    standard_id = Column(String(36), ForeignKey("standards.standard_id"), nullable=False)
+    clause = Column(Text, nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    blocking_threshold = Column(Integer, nullable=False, default=2)
+    is_mandatory = Column(Boolean, nullable=False, default=False)
+    scoring_type = Column(String, nullable=False)
+    content_type = Column(String, nullable=True)
+    applicability = Column(Text, nullable=False, default='{"always": true}')
+    score_5_criteria = Column(Text, nullable=False)
+    score_3_criteria = Column(Text, nullable=False)
+    score_1_criteria = Column(Text, nullable=False)
+    instructional_text = Column(Text, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(String, nullable=False, default=_utcnow)
+    updated_at = Column(String, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "scoring_type IN ('Blocking','Advisory','Maturity','Alignment')",
+            name="ck_dim_scoring_type",
+        ),
+        CheckConstraint(
+            "content_type IS NULL OR content_type IN ('prompt_content','wrapper_metadata','registry_policy')",
+            name="ck_dim_content_type",
+        ),
+    )
+
+
+class Gate(Base):
+    __tablename__ = "gates"
+
+    gate_id = Column(String(36), primary_key=True, default=_uuid)
+    code = Column(String, unique=True, nullable=False)
+    title = Column(String, nullable=False)
+    from_phase_id = Column(String(36), ForeignKey("phases.phase_id"), nullable=False)
+    min_grade = Column(String, nullable=False, default="3.0")
+    approver_role = Column(String, nullable=False)
+    rationale_required = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+
+class GateMustPassDimension(Base):
+    __tablename__ = "gate_must_pass_dimensions"
+
+    gate_id = Column(String(36), ForeignKey("gates.gate_id"), primary_key=True)
+    dimension_id = Column(String(36), ForeignKey("dimensions.dimension_id"), primary_key=True)
+
+
+class FormField(Base):
+    __tablename__ = "form_fields"
+
+    field_id = Column(String(36), primary_key=True, default=_uuid)
+    form_code = Column(String, nullable=False)
+    field_code = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    help_text = Column(Text, nullable=True)
+    field_type = Column(String, nullable=False)
+    options = Column(Text, nullable=True)
+    validation = Column(Text, nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    __table_args__ = (
+        UniqueConstraint("form_code", "field_code", name="uq_ff_form_field"),
+    )
+
+
+class ComplianceRun(Base):
+    """
+    New phase-aware compliance run record. Coexists with legacy
+    ComplianceCheck. New engine writes here; legacy engine still writes
+    to compliance_checks during the transition.
+    """
+    __tablename__ = "compliance_runs"
+
+    run_id = Column(String(36), primary_key=True, default=_uuid)
+    phase_id = Column(String(36), ForeignKey("phases.phase_id"), nullable=False)
+    subject_type = Column(String, nullable=False)
+    subject_id = Column(String(36), nullable=False)
+    run_at = Column(String, nullable=False, default=_utcnow)
+    run_by = Column(String, nullable=False)
+    overall_result = Column(String, nullable=True)
+    composite_grade = Column(String, nullable=True)
+    scores_json = Column(Text, nullable=False, default="[]")
+    flags_json = Column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "subject_type IN ('prompt_version','deployment_record','operation_record')",
+            name="ck_cr_subject_type",
+        ),
+        CheckConstraint(
+            "overall_result IS NULL OR overall_result IN ('Pass','Pass with warnings','Fail')",
+            name="ck_cr_result",
+        ),
+    )
+
+
+class DeploymentRecord(Base):
+    __tablename__ = "deployment_records"
+
+    deployment_id = Column(String(36), primary_key=True, default=_uuid)
+    prompt_id = Column(String(36), ForeignKey("prompts.prompt_id"), nullable=False)
+    version_id = Column(String(36), nullable=False)
+    invocation_context = Column(Text, nullable=True)
+    ai_platform = Column(String, nullable=True)
+    output_destination = Column(String, nullable=True)
+    runtime_owner_id = Column(String(36), ForeignKey("users.user_id"), nullable=True)
+    form_responses_json = Column(Text, nullable=False, default="{}")
+    status = Column(String, nullable=False, default="Draft")
+    created_at = Column(String, nullable=False, default=_utcnow)
+    updated_at = Column(String, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('Draft','Pending Approval','Approved','Rejected','Withdrawn')",
+            name="ck_dr_status",
+        ),
+    )
+
+
+class OperationRecord(Base):
+    __tablename__ = "operation_records"
+
+    operation_id = Column(String(36), primary_key=True, default=_uuid)
+    deployment_id = Column(String(36), ForeignKey("deployment_records.deployment_id"), nullable=False)
+    state = Column(String, nullable=False, default="Active")
+    next_review_date = Column(String, nullable=True)
+    review_cadence_days = Column(Integer, nullable=False, default=365)
+    incidents_json = Column(Text, nullable=False, default="[]")
+    retired_at = Column(String, nullable=True)
+    retired_reason = Column(Text, nullable=True)
+    created_at = Column(String, nullable=False, default=_utcnow)
+    updated_at = Column(String, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('Active','Under Review','Suspended','Retired')",
+            name="ck_or_state",
+        ),
+    )
+
+
+class GateDecision(Base):
+    __tablename__ = "gate_decisions"
+
+    decision_id = Column(String(36), primary_key=True, default=_uuid)
+    gate_id = Column(String(36), ForeignKey("gates.gate_id"), nullable=False)
+    subject_type = Column(String, nullable=False)
+    subject_id = Column(String(36), nullable=False)
+    run_id = Column(String(36), ForeignKey("compliance_runs.run_id"), nullable=False)
+    decision = Column(String, nullable=False)
+    decided_by = Column(String(36), ForeignKey("users.user_id"), nullable=False)
+    decided_at = Column(String, nullable=False, default=_utcnow)
+    rationale = Column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "decision IN ('Approved','Rejected')",
+            name="ck_gd_decision",
+        ),
+    )

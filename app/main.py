@@ -14,13 +14,24 @@ from app.models import (  # noqa: F401 — imports register all models with Base
     Brief,
     ComplianceCheck,
     ComplianceCheckJob,
+    ComplianceRun,
+    DeploymentRecord,
+    Dimension,
+    FormField,
+    Gate,
+    GateDecision,
+    GateMustPassDimension,
     InjectionPattern,
+    OperationRecord,
+    Phase,
+    PhaseWeight,
     Prompt,
     PromptComponent,
     PromptLibrary,
     PromptTemplate,
     PromptVersion,
     ScoringDimension,
+    Standard,
     UpgradeProposal,
     User,
 )
@@ -37,6 +48,7 @@ from app.routers import templates as templates_router
 from app.routers import upgrade as upgrade_router
 from app.routers import versions as versions_router
 from app.seed import run_seed
+from app.seed_phase2 import run_phase2_seed
 from app.triggers import create_triggers_and_indexes
 
 
@@ -50,6 +62,7 @@ async def lifespan(app: FastAPI):
     run_migrations(engine)
     create_triggers_and_indexes(engine)
     run_seed()
+    run_phase2_seed()
     print("Startup initialization complete")
 
     yield
