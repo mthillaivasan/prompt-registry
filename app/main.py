@@ -39,6 +39,7 @@ from app.migrations import run_migrations
 from app.version import COMMIT_HASH
 from app.routers import auth as auth_router
 from app.routers import briefs as briefs_router
+from app.routers import build_gate as build_gate_router
 from app.routers import compliance as compliance_router
 from app.routers import dashboard as dashboard_router
 from app.routers import deployments as deployments_router
@@ -118,6 +119,7 @@ def list_audit_log(
 app.include_router(auth_router.router)
 app.include_router(health_router.router)
 app.include_router(briefs_router.router)
+app.include_router(build_gate_router.router)
 app.include_router(compliance_router.router)
 app.include_router(dashboard_router.router)
 app.include_router(deployments_router.router)
