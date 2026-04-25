@@ -36,6 +36,9 @@ from app.models import (
     ComplianceRun,
     DeploymentRecord,
     FormField,
+    Gate,
+    GateDecision,
+    Phase,
     Prompt,
     PromptVersion,
     Standard,
@@ -429,3 +432,168 @@ def get_deployment_compliance(
     if run is None:
         raise HTTPException(status_code=404, detail="No compliance run for this record")
     return _serialise_run(run, db)
+
+
+# ── Block 16: Deployment gate ──────────────────────────────────────────────
+
+# Role hierarchy is a domain fact, not dimension-specific data. Stored once
+# here so the gate check is `_role_satisfies(user.role, gate.approver_role)`,
+# read from config (gate.approver_role).
+_ROLE_RANK = {"Maker": 1, "Checker": 2, "Admin": 3}
+
+
+def _role_satisfies(actual: str, required: str) -> bool:
+    return _ROLE_RANK.get(actual, 0) >= _ROLE_RANK.get(required, 999)
+
+
+def _gate_for_phase_code(db: Session, phase_code: str) -> Gate | None:
+    phase = db.query(Phase).filter(Phase.code == phase_code).one_or_none()
+    if phase is None:
+        return None
+    return (
+        db.query(Gate)
+        .filter(Gate.from_phase_id == phase.phase_id, Gate.is_active == True)  # noqa: E712
+        .first()
+    )
+
+
+@router.post("/deployments/{deployment_id}/gate-decision", status_code=status.HTTP_201_CREATED)
+def decide_deployment_gate(
+    deployment_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Approve or reject a deployment.
+
+    Body:
+        decision: 'Approved' | 'Rejected'
+        rationale: str — required when gate config says so
+
+    Pre-conditions (read from `gates` config — no hard-coded gate logic):
+        - Deployment record status must be 'Pending Approval'.
+        - A ComplianceRun for the record must exist.
+        - The user's role must satisfy gate.approver_role.
+        - If decision is 'Approved', the run's overall_result must not be
+          'Fail' (must-pass dimension or composite floor failed); a Fail
+          requires a re-run before approval.
+        - rationale is mandatory when gate.rationale_required is true,
+          regardless of decision.
+
+    Effect:
+        - Writes a GateDecision row.
+        - Transitions DeploymentRecord.status to 'Approved' or 'Rejected'.
+        - Writes an Approved audit log entry (decision noted in detail).
+    """
+    decision = body.get("decision")
+    rationale = (body.get("rationale") or "").strip()
+    if decision not in ("Approved", "Rejected"):
+        raise HTTPException(status_code=422, detail="decision must be 'Approved' or 'Rejected'")
+
+    rec = db.query(DeploymentRecord).filter(
+        DeploymentRecord.deployment_id == deployment_id
+    ).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Deployment record not found")
+    if rec.status != "Pending Approval":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Gate decision requires status 'Pending Approval'; record is '{rec.status}'",
+        )
+
+    gate = _gate_for_phase_code(db, "deployment")
+    if gate is None:
+        raise HTTPException(status_code=500, detail="Deployment gate is not configured")
+
+    if not _role_satisfies(current_user.role, gate.approver_role):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Gate '{gate.code}' requires role '{gate.approver_role}'; you are '{current_user.role}'",
+        )
+
+    if gate.rationale_required and not rationale:
+        raise HTTPException(status_code=422, detail="Rationale is required for this gate")
+
+    run = deployment_compliance.get_latest_run(db, deployment_id)
+    if run is None:
+        raise HTTPException(
+            status_code=409,
+            detail="No compliance run for this record; run /compliance first",
+        )
+    if decision == "Approved" and run.overall_result == "Fail":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot approve a deployment whose latest compliance run is 'Fail'",
+        )
+
+    gd = GateDecision(
+        gate_id=gate.gate_id,
+        subject_type="deployment_record",
+        subject_id=deployment_id,
+        run_id=run.run_id,
+        decision=decision,
+        decided_by=current_user.user_id,
+        rationale=rationale or None,
+    )
+    db.add(gd)
+
+    rec.status = decision  # 'Approved' or 'Rejected' — both valid record statuses
+    rec.updated_at = _utcnow()
+
+    db.add(AuditLog(
+        user_id=current_user.user_id,
+        action="Approved" if decision == "Approved" else "DefectLogged",
+        entity_type="PromptVersion",
+        entity_id=deployment_id,
+        detail=json.dumps({
+            "deployment_id": deployment_id,
+            "gate": gate.code,
+            "decision": decision,
+            "run_id": run.run_id,
+            "rationale": rationale or None,
+        }),
+    ))
+
+    db.commit()
+    db.refresh(gd)
+    return {
+        "decision_id": gd.decision_id,
+        "gate_code": gate.code,
+        "decision": gd.decision,
+        "decided_by": gd.decided_by,
+        "decided_at": gd.decided_at,
+        "rationale": gd.rationale,
+        "deployment_id": deployment_id,
+        "deployment_status": rec.status,
+        "run_id": run.run_id,
+    }
+
+
+@router.get("/deployments/{deployment_id}/gate-decisions")
+def list_gate_decisions(
+    deployment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Audit trail of every gate firing on this deployment record."""
+    rows = (
+        db.query(GateDecision)
+        .filter(
+            GateDecision.subject_type == "deployment_record",
+            GateDecision.subject_id == deployment_id,
+        )
+        .order_by(GateDecision.decided_at.desc())
+        .all()
+    )
+    return [
+        {
+            "decision_id": gd.decision_id,
+            "gate_id": gd.gate_id,
+            "decision": gd.decision,
+            "decided_by": gd.decided_by,
+            "decided_at": gd.decided_at,
+            "rationale": gd.rationale,
+            "run_id": gd.run_id,
+        }
+        for gd in rows
+    ]
