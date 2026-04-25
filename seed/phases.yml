@@ -1,0 +1,54 @@
+# Phase definitions.
+#
+# Each phase is a stage in the prompt lifecycle with its own dimension subset,
+# compliance grade, approval gate, and scoring input shape.
+#
+# `scoring_input` names what the engine receives at scoring time:
+#   prompt_text       — Build phase. Artefact-level text only.
+#   deployment_record — Deployment phase. Runtime context fields.
+#   operation_record  — Operation phase. Cadence state, incidents, telemetry.
+#
+# The engine code does not branch on phase identity. It loads dimensions
+# whose `phase` matches, applies their `applicability_rule` to the input,
+# runs the survivors through their `scoring_rubric`, aggregates per
+# `phase_weights` from standards.yml.
+
+phases:
+
+  - code: build
+    title: Build
+    purpose: |
+      A brief becomes a prompt. Artefact-level only. Asks: is this prompt
+      well-constructed and secure in isolation, before any runtime context
+      attaches.
+    scoring_input: prompt_text
+    sort_order: 1
+    grade_thresholds:
+      pass: 4.0
+      pass_with_warnings: 3.0
+      fail_below: 3.0
+
+  - code: deployment
+    title: Deployment
+    purpose: |
+      A Build-approved prompt becomes a deployed capability. Runtime context
+      captured. Asks: is this deployment safe in its actual runtime — what
+      calls it, what data flows in, where output goes, who owns it.
+    scoring_input: deployment_record
+    sort_order: 2
+    grade_thresholds:
+      pass: 4.0
+      pass_with_warnings: 3.0
+      fail_below: 3.0
+
+  - code: operation
+    title: Operation
+    purpose: |
+      A deployed capability runs. Continuous surveillance. Asks: is this
+      still behaving, and is it still needed.
+    scoring_input: operation_record
+    sort_order: 3
+    grade_thresholds:
+      pass: 4.0
+      pass_with_warnings: 3.0
+      fail_below: 3.0

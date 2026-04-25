@@ -1,0 +1,59 @@
+# Gate definitions.
+#
+# Each gate is the approval rule that fires at the boundary between two
+# phases. The gate's `phase` field names the phase it gates *out of*.
+#
+# Rules are data-driven. The engine evaluates `min_grade` against the
+# phase's compliance run. `must_pass_dimensions` lists dimension codes
+# that must individually score at or above their `blocking_threshold`
+# even if the composite passes. `approver_role` names who may sign off.
+#
+# Configuration-first: gate logic does not branch on dimension identity
+# in code. The lists below are read; the engine loops.
+
+gates:
+
+  - code: build_to_deployment
+    title: Build → Deployment
+    phase: build
+    min_grade: 3.0
+    must_pass_dimensions:
+      - OWASP_PROMPT_INJECTION
+      - OWASP_SENSITIVE_INFO
+      - OWASP_EXCESSIVE_AGENCY
+      - OWASP_MISINFORMATION
+      - REG_TRANSPARENCY
+    approver_role: Checker
+    rationale_required: true
+    notes: |
+      The five must-pass dimensions are the hard floors for any prompt
+      reaching Deployment. They are the OWASP-aligned safety controls
+      plus the transparency declaration. Other Build dimensions can
+      score at warning level without blocking.
+
+  - code: deployment_to_operation
+    title: Deployment → Operation
+    phase: deployment
+    min_grade: 3.0
+    must_pass_dimensions:
+      - REG_OUTSOURCING_CONTROLS
+      - ISO42001_DATA_GOVERNANCE
+    approver_role: Checker
+    rationale_required: true
+    notes: |
+      Deployment gate enforces that the runtime data and outsourcing
+      configuration is consistent with the Build declarations. The
+      remaining Deployment dimensions are added in Block 14 spec.
+
+  - code: operation_review
+    title: Operation review (cadence-driven)
+    phase: operation
+    min_grade: 3.0
+    must_pass_dimensions: []
+    approver_role: Checker
+    rationale_required: true
+    notes: |
+      Fires on cadence (per `next_review_date` on the operation_record)
+      or on incident-trigger from the operation_records table. A failed
+      review escalates to a retire decision; the retire path is its own
+      flow with its own gate added in Block 18.

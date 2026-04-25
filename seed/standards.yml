@@ -1,0 +1,95 @@
+# Standards catalogue.
+#
+# Each entry is a versioned reference to an external standard or regulation.
+# Dimensions reference standards by `standard_code` plus `clause`; UI joins
+# dimensions to this table to render labelled grades ("OWASP LLM01 — Pass").
+#
+# Versions are recorded explicitly so that re-publishing a standard does not
+# silently rewrite the dimension's basis. When a standard updates, a new row
+# is added; existing dimensions continue to point at the previous version
+# until a config change re-points them.
+
+standards:
+
+  - standard_code: OWASP_LLM_TOP10
+    title: OWASP LLM Top 10
+    version: "2025"
+    publisher: OWASP
+    url: https://genai.owasp.org/llm-top-10/
+    notes: |
+      The 2025 list is canonical. The 2023 list is retired. Some legacy
+      dimension IDs reference 2023 numbering; Block 4 retags them.
+
+  - standard_code: ISO_42001
+    title: ISO/IEC 42001 — Artificial Intelligence Management System
+    version: "2023"
+    publisher: ISO/IEC
+    url: https://www.iso.org/standard/81230.html
+
+  - standard_code: NIST_AI_RMF
+    title: NIST AI Risk Management Framework
+    version: "1.0"
+    publisher: NIST
+    url: https://www.nist.gov/itl/ai-risk-management-framework
+
+  - standard_code: EU_AI_ACT
+    title: EU Artificial Intelligence Act
+    version: "Regulation (EU) 2024/1689"
+    publisher: European Commission
+    url: https://eur-lex.europa.eu/eli/reg/2024/1689
+
+  - standard_code: UK_GDPR
+    title: UK General Data Protection Regulation
+    version: "as amended"
+    publisher: ICO
+    url: https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/
+
+  - standard_code: FCA_SYSC
+    title: FCA Senior Management Arrangements, Systems and Controls
+    version: "as published"
+    publisher: Financial Conduct Authority
+    url: https://www.handbook.fca.org.uk/handbook/SYSC/
+
+  - standard_code: PRA_SS1_21
+    title: PRA Supervisory Statement SS1/21 — Operational Resilience
+    version: "2021"
+    publisher: Bank of England, Prudential Regulation Authority
+    url: https://www.bankofengland.co.uk/prudential-regulation/publication/2021/march/operational-resilience-impact-tolerances-for-important-business-services-ss
+
+  - standard_code: EBA_OUTSOURCING
+    title: EBA Guidelines on Outsourcing Arrangements
+    version: "EBA/GL/2019/02"
+    publisher: European Banking Authority
+    url: https://www.eba.europa.eu/regulation-and-policy/internal-governance/guidelines-on-outsourcing-arrangements
+
+# Per-phase composite weighting. Configuration-first: weights are tunable
+# without code change. The Build engine reads these at runtime, multiplies
+# each dimension's score by `phase_weights[phase][standard_code]`, and
+# normalises. A weight of 0 excludes a standard from the phase composite.
+#
+# These initial values reproduce the legacy 40/30/20/10 (REG/OWASP/NIST/ISO)
+# split for Build. Deployment and Operation start with placeholder shapes;
+# refined in Blocks 14 and 17.
+
+phase_weights:
+
+  build:
+    EU_AI_ACT: 0.10
+    UK_GDPR: 0.05
+    FCA_SYSC: 0.10
+    PRA_SS1_21: 0.10
+    EBA_OUTSOURCING: 0.05      # Build declaration only; binding check at Deployment
+    OWASP_LLM_TOP10: 0.30
+    NIST_AI_RMF: 0.20
+    ISO_42001: 0.10
+
+  deployment:
+    EBA_OUTSOURCING: 0.30
+    ISO_42001: 0.40             # A.7 data-flow check is dominant at Deployment
+    OWASP_LLM_TOP10: 0.20       # LLM05/LLM08/LLM10 deployment-side
+    EU_AI_ACT: 0.10
+
+  operation:
+    NIST_AI_RMF: 0.50           # MEASURE / MANAGE dominate Operation
+    ISO_42001: 0.30
+    EU_AI_ACT: 0.20
