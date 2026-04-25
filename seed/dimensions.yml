@@ -485,3 +485,106 @@ dimensions:
       The Build dimension captures the declaration. The Deployment
       counterpart (Block 14) checks that the runtime data flow matches
       the declaration. Same standard reference, different scoring input.
+
+  # -------------------------------------------------------------------------
+  # Deployment-phase dimensions (Block 15) — runtime concerns the form
+  # captures and the engine scores against the deployment_record. None of
+  # these reference a code in engine code; they are read by phase like
+  # any other dimension.
+  # -------------------------------------------------------------------------
+
+  - code: OWASP_LLM01_RUNTIME
+    title: Runtime prompt-injection containment
+    phase: deployment
+    standard_code: OWASP_LLM_TOP10
+    clause: LLM01:2025 — runtime side
+    sort_order: 510
+    blocking_threshold: 2
+    is_mandatory: true
+    scoring_type: Blocking
+    content_type: registry_policy
+    applicability:
+      if_flag_is_true: input_user_supplied
+    scoring_rubric:
+      score_5: |
+        Runtime wraps user-supplied input in delimiters before submission,
+        sanitises tool inputs, and the deployment record names the
+        escalation path on suspected injection.
+      score_3: |
+        Wrapping is performed but escalation path is not declared, OR
+        sanitisation is partial.
+      score_1: |
+        User-supplied input flows directly into the model with no
+        wrapping, sanitisation, or escalation path.
+    instructional_text: null
+
+  - code: OWASP_LLM05_OUTPUT_HANDLING
+    title: Improper output handling — downstream-system safety
+    phase: deployment
+    standard_code: OWASP_LLM_TOP10
+    clause: LLM05:2025 — improper output handling
+    sort_order: 520
+    blocking_threshold: 2
+    is_mandatory: true
+    scoring_type: Blocking
+    content_type: registry_policy
+    applicability:
+      if_flag_is_true: output_executed_by_machine
+    scoring_rubric:
+      score_5: |
+        Machine-acted output is parsed via a constrained format (JSON
+        schema, typed contract), encoded for the consumer, and a
+        rollback or human-in-the-loop path exists for unsafe output.
+      score_3: |
+        Output is parsed but encoding or rollback path is partial.
+      score_1: |
+        Output is acted on without parsing discipline. Unsafe outputs
+        reach downstream systems unfiltered.
+    instructional_text: null
+
+  - code: OWASP_LLM10_UNBOUNDED
+    title: Unbounded consumption — token, cost, latency caps in place
+    phase: deployment
+    standard_code: OWASP_LLM_TOP10
+    clause: LLM10:2025 — unbounded consumption
+    sort_order: 530
+    blocking_threshold: 2
+    is_mandatory: false
+    scoring_type: Advisory
+    content_type: registry_policy
+    applicability:
+      always: true
+    scoring_rubric:
+      score_5: |
+        Deployment record names a token cap, a cost ceiling per
+        invocation, and a latency envelope, with alerting thresholds
+        defined.
+      score_3: |
+        Two of token cap, cost ceiling, latency envelope are declared.
+      score_1: |
+        No consumption limits declared.
+    instructional_text: null
+
+  - code: ISO42001_DATA_GOVERNANCE_RUNTIME
+    title: Runtime data governance — flow matches the Build declaration
+    phase: deployment
+    standard_code: ISO_42001
+    clause: A.7 — data for AI systems (runtime)
+    sort_order: 540
+    blocking_threshold: 2
+    is_mandatory: true
+    scoring_type: Blocking
+    content_type: registry_policy
+    applicability:
+      if_flag_is_true: personal_data_present
+    scoring_rubric:
+      score_5: |
+        Personal data flowing to the model has a declared legal basis,
+        upstream redaction is applied, and the deployment record names
+        the data residency consistent with the firm's policy.
+      score_3: |
+        Two of legal basis, redaction, residency are declared.
+      score_1: |
+        Personal data flows to the model without legal basis,
+        redaction, or residency declaration.
+    instructional_text: null

@@ -33,13 +33,15 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import (
     AuditLog,
+    ComplianceRun,
     DeploymentRecord,
     FormField,
     Prompt,
     PromptVersion,
+    Standard,
     User,
 )
-from services import form_validation
+from services import deployment_compliance, form_validation
 
 router = APIRouter(tags=["deployments"])
 
@@ -319,3 +321,111 @@ def submit_deployment(
     db.commit()
     db.refresh(rec)
     return _serialise_record(rec)
+
+
+# ── Block 15: Deployment compliance run ────────────────────────────────────
+
+def _serialise_run(run: ComplianceRun, db: Session | None = None) -> dict:
+    scores = json.loads(run.scores_json) if run.scores_json else []
+    flags = json.loads(run.flags_json) if run.flags_json else []
+    composite = float(run.composite_grade) if run.composite_grade is not None else None
+
+    # Attach standards labelling per scored dimension so the UI can render
+    # "OWASP LLM05 — Pass" without a second round trip. Joins generically
+    # via dimension_id snapshotted into scores_json.
+    if db is not None and scores:
+        from app.models import Dimension as _Dim
+        dim_ids = [s["dimension_id"] for s in scores if s.get("dimension_id")]
+        dims = {d.dimension_id: d for d in db.query(_Dim).filter(_Dim.dimension_id.in_(dim_ids)).all()}
+        std_ids = {d.standard_id for d in dims.values()}
+        stds = {s.standard_id: s for s in db.query(Standard).filter(Standard.standard_id.in_(std_ids)).all()}
+        for s in scores:
+            d = dims.get(s.get("dimension_id"))
+            if d is None:
+                continue
+            std = stds.get(d.standard_id)
+            s["standard"] = {
+                "standard_code": std.standard_code if std else "",
+                "title": std.title if std else "",
+                "version": std.version if std else "",
+                "clause": d.clause or "",
+            }
+
+    return {
+        "run_id": run.run_id,
+        "subject_type": run.subject_type,
+        "subject_id": run.subject_id,
+        "run_at": run.run_at,
+        "run_by": run.run_by,
+        "overall_result": run.overall_result,
+        "composite_grade": composite,
+        "scores": scores,
+        "flags": flags,
+    }
+
+
+@router.post("/deployments/{deployment_id}/compliance", status_code=status.HTTP_201_CREATED)
+def run_deployment_check(
+    deployment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Run the Deployment-phase compliance engine on a deployment record.
+
+    The record must be in status `Pending Approval` — running compliance
+    on a Draft is meaningless because the form is not yet validated, and
+    running on Approved or Rejected is a re-run that the Block 16 gate
+    flow handles separately.
+    """
+    rec = db.query(DeploymentRecord).filter(
+        DeploymentRecord.deployment_id == deployment_id
+    ).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Deployment record not found")
+    if rec.status != "Pending Approval":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Compliance run requires status 'Pending Approval'; record is '{rec.status}'",
+        )
+
+    try:
+        run = deployment_compliance.run_deployment_compliance(
+            db,
+            deployment_id=deployment_id,
+            run_by=current_user.user_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    db.add(AuditLog(
+        user_id=current_user.user_id,
+        action="ComplianceChecked",
+        entity_type="PromptVersion",
+        entity_id=deployment_id,
+        detail=json.dumps({
+            "deployment_id": deployment_id,
+            "run_id": run.run_id,
+            "result": run.overall_result,
+        }),
+    ))
+    db.commit()
+    return _serialise_run(run, db)
+
+
+@router.get("/deployments/{deployment_id}/compliance")
+def get_deployment_compliance(
+    deployment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the most recent Deployment-phase compliance run for the record."""
+    rec = db.query(DeploymentRecord).filter(
+        DeploymentRecord.deployment_id == deployment_id
+    ).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Deployment record not found")
+
+    run = deployment_compliance.get_latest_run(db, deployment_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="No compliance run for this record")
+    return _serialise_run(run, db)

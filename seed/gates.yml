@@ -37,13 +37,17 @@ gates:
     min_grade: 3.0
     must_pass_dimensions:
       - REG_OUTSOURCING_CONTROLS
-      - ISO42001_DATA_GOVERNANCE
+      - ISO42001_DATA_GOVERNANCE_RUNTIME
+      - OWASP_LLM01_RUNTIME
+      - OWASP_LLM05_OUTPUT_HANDLING
     approver_role: Checker
     rationale_required: true
     notes: |
-      Deployment gate enforces that the runtime data and outsourcing
-      configuration is consistent with the Build declarations. The
-      remaining Deployment dimensions are added in Block 14 spec.
+      Must-pass set covers the four runtime safety floors. Dimensions
+      whose applicability rule excludes them from a run are silently
+      skipped at gate evaluation (services.applicability.gate_failed),
+      so this list is correct whether or not a given deployment has
+      user-supplied input or machine-acted output.
 
   - code: operation_review
     title: Operation review (cadence-driven)

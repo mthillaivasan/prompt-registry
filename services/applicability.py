@@ -50,6 +50,8 @@ def evaluate(rule: Mapping[str, Any], context: Mapping[str, Any]) -> bool:
         {"if_input_type_in": ["document", ...]}
         {"if_prompt_type_in": ["Extraction", ...]}
         {"if_risk_tier_at_least": "Limited"}
+        {"if_flag_is_true":  "<flag_name>"}
+        {"if_flag_is_false": "<flag_name>"}
         {"all_of": [rule, rule, ...]}
         {"any_of": [rule, rule, ...]}
         {"not": rule}
@@ -73,6 +75,12 @@ def evaluate(rule: Mapping[str, Any], context: Mapping[str, Any]) -> bool:
     if "if_risk_tier_at_least" in rule:
         floor = rule["if_risk_tier_at_least"]
         return _tier_rank(context.get("risk_tier")) >= _tier_rank(floor)
+
+    if "if_flag_is_true" in rule:
+        return bool(context.get(rule["if_flag_is_true"]))
+
+    if "if_flag_is_false" in rule:
+        return not bool(context.get(rule["if_flag_is_false"]))
 
     if "all_of" in rule:
         clauses = rule["all_of"]
