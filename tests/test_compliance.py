@@ -283,3 +283,22 @@ def test_list_scoring_dimensions(client, auth_headers):
     codes = {d["code"] for d in dims}
     assert "REG_D1" in codes
     assert "OWASP_LLM01" in codes
+
+
+def test_list_wrapper_metadata_dimensions(client, auth_headers):
+    """Item 2: governance-context endpoint returns exactly the five
+    wrapper_metadata dims and excludes prompt_content / registry_policy."""
+    resp = client.get("/scoring-dimensions/wrapper-metadata", headers=auth_headers)
+    assert resp.status_code == 200
+    dims = resp.json()
+    codes = {d["code"] for d in dims}
+    assert codes == {"REG_D1", "REG_D4", "REG_D5", "NIST_GOVERN_1", "NIST_MAP_1"}
+    # Shape check — each row carries the fields the panel renders
+    for d in dims:
+        assert d["name"]
+        assert d["source_reference"]
+        assert d["description"]
+        assert d["score_5_criteria"]
+    # Negative — prompt_content (REG_D2) and registry_policy (REG_D6) excluded
+    assert "REG_D2" not in codes
+    assert "REG_D6" not in codes

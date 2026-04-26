@@ -245,6 +245,40 @@ def list_dimensions(
     ]
 
 
+@router.get("/scoring-dimensions/wrapper-metadata")
+def list_wrapper_metadata_dimensions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return active scoring_dimensions whose content_type is wrapper_metadata.
+
+    Surfaces governance context that lives around the LLM output rather than
+    inside the prompt body. Consumed by the prompt-detail Governance Context
+    panel. Read-only catalogue view; per-prompt assignments (accountable
+    reviewer, audit-trail format, etc.) are a follow-on per PHASE2.md.
+    """
+    rows = (
+        db.query(ScoringDimension)
+        .filter(
+            ScoringDimension.is_active == True,  # noqa: E712
+            ScoringDimension.content_type == "wrapper_metadata",
+        )
+        .order_by(ScoringDimension.sort_order)
+        .all()
+    )
+    return [
+        {
+            "code": d.code,
+            "name": d.name,
+            "framework": d.framework,
+            "source_reference": d.source_reference,
+            "description": d.description,
+            "score_5_criteria": d.score_5_criteria,
+        }
+        for d in rows
+    ]
+
+
 @router.get("/phase-dimensions/{phase_code}")
 def list_phase_dimensions(
     phase_code: str,

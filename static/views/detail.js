@@ -61,6 +61,18 @@ viewInits.detail = async function (params) {
     html += '<div id="detail-compliance-panel"><div class="card"><div class="card-title" style="margin-bottom:12px">Compliance Scores</div><p style="color:var(--text2);font-size:13px">Run a compliance check to see scores.</p></div></div>';
     html += '</div>'; // end detail-columns
 
+    // Governance Context — wrapper_metadata dimensions (REG_D1, REG_D4, REG_D5,
+    // NIST_GOVERN_1, NIST_MAP_1). Lives around the prompt, not inside it.
+    html += `<div class="card">
+      <div class="card-title" style="margin-bottom:12px">Governance Context</div>
+      <p style="color:var(--text2);font-size:13px;margin-bottom:12px">
+        Wrapper-metadata dimensions — governance context that applies to this prompt
+        but is not injected into the prompt body. Reviewers and auditors consult these
+        alongside the LLM output rather than inside it.
+      </p>
+      <div id="detail-governance-context"><div style="color:var(--text2);font-size:13px">Loading…</div></div>
+    </div>`;
+
     // Version history — open by default
     html += `<div class="card">
       <div class="card-title" style="margin-bottom:12px">Version History (${_detailVersions.length})</div>
@@ -90,11 +102,39 @@ viewInits.detail = async function (params) {
     el.innerHTML = html;
     renderDetailVersionRows(p);
     renderDetailPromptText();
+    renderGovernanceContext();
 
   } catch (err) {
     el.innerHTML = '<div class="empty-state"><p style="color:var(--red)">' + esc(err.message) + '</p></div>';
   }
 };
+
+async function renderGovernanceContext() {
+  const host = document.getElementById('detail-governance-context');
+  if (!host) return;
+  try {
+    const dims = await api('/scoring-dimensions/wrapper-metadata');
+    if (!dims || dims.length === 0) {
+      host.innerHTML = '<div style="color:var(--text2);font-size:13px">No wrapper-metadata dimensions configured.</div>';
+      return;
+    }
+    let rows = '';
+    dims.forEach(d => {
+      rows += `<tr>
+        <td><strong>${esc(d.name)}</strong><div style="color:var(--text2);font-size:12px">${esc(d.code)}</div></td>
+        <td style="color:var(--text2);font-size:13px">${esc(d.source_reference || '')}</td>
+        <td style="font-size:13px">${esc(d.description || '')}</td>
+        <td style="font-size:13px">${esc(d.score_5_criteria || '')}</td>
+      </tr>`;
+    });
+    host.innerHTML = `<table>
+      <thead><tr><th>Dimension</th><th>Source</th><th>Covers</th><th>What good looks like</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  } catch (err) {
+    host.innerHTML = '<div style="color:var(--red);font-size:13px">Failed to load governance context: ' + esc(err.message) + '</div>';
+  }
+}
 
 function renderDetailPromptText() {
   const textEl = document.getElementById('detail-prompt-text');
