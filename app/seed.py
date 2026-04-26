@@ -51,15 +51,9 @@ _CONTENT_TYPES_BY_CODE = {
 }
 
 _REG_D2_INSTRUCTIONAL_TEXT = (
-    "Always end your output with a section titled AUDIT. Inside the AUDIT "
-    "section, render each audit field provided to you on its own line, in "
-    "the format 'field name: field value'. The audit fields and their "
-    "values will be provided in the user message. Do not modify field "
-    "names, do not omit any field, do not add commentary or explanation "
-    "inside the AUDIT section, and do not omit the AUDIT section under any "
-    "circumstances. If a field value is missing, render the literal "
-    "placeholder string (such as '{generation_date}') in its place so the "
-    "missing value is visible."
+    "Mark every output as AI-generated and advisory. State the limitations "
+    "of your analysis explicitly. Do not present AI-derived conclusions as "
+    "definitive human judgements."
 )
 
 _DIMENSIONS = [

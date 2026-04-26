@@ -96,7 +96,8 @@ def test_dimension_with_instructional_text_renders_clean(client, auth_headers):
     assert "OWASP_" not in sent_system
     assert "NIST_" not in sent_system
     assert "ISO42001_" not in sent_system
-    assert "AUDIT" in sent_system  # confirms instructional_text was rendered
+    assert "AI-generated and advisory" in sent_system  # confirms instructional_text was rendered
+    assert "AUDIT" not in sent_system  # AUDIT scaffold split out — wrapper-metadata UI surfaces it now
 
 
 def test_dimension_without_instructional_text_uses_fallback_format(client, auth_headers):
@@ -188,7 +189,8 @@ def test_mixed_selection_only_prompt_content_renders(client, auth_headers):
 
     assert resp.status_code == 200, resp.text
     sent_system = mock_client.messages.create.call_args.kwargs["system"]
-    assert "AUDIT" in sent_system  # REG_D2 instructional_text
+    assert "AI-generated and advisory" in sent_system  # REG_D2 instructional_text
+    assert "AUDIT" not in sent_system  # AUDIT scaffold no longer in prompt body
     assert "REG_D1" not in sent_system
     assert "Human Oversight" not in sent_system
 
