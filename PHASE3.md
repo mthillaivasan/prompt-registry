@@ -107,5 +107,21 @@ Items are listed under their Phase 2 source. Each carries:
 
 ---
 
+## Brief Builder design principle (logged 27 April 2026)
+
+The Brief Builder's purpose is to get a user to a runnable version 1 prompt as quickly as possible, not to extract a complete specification before any code runs. Subsequent depth comes through iteration once the user has seen a model's output and knows where it falls short.
+
+### Implications for L2 (library integration into Brief Builder)
+
+The library should support v1-fast and iteration-deep workflows differently. On v1, library examples are passive context — shown for reference, not used to drive deeper questions. On iteration (when the user returns to refine an existing prompt), library examples become coaching: "the FINMA summary prompt specifies these output fields explicitly; yours doesn't. Add output specification?"
+
+Conditional questioning by output structure (JSON / structured / unstructured) is deferred to iteration, not v1. v1 asks the minimum: input type, output type, domain. Anything more is an iteration concern.
+
+### Anti-pattern to avoid
+
+Comprehensive Brief Builder questionnaires that delay first run. The library's job is to teach by example after a v1 has been tried, not to interrogate before one exists.
+
+---
+
 *This file is updated by every block that defers a found item. Block
 numbers in the §"From Block N" headers match the source block.*
