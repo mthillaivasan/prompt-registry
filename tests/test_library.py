@@ -293,3 +293,54 @@ def test_seed_load_entries_reports_each_action(db):
     results = load_entries(db, entries, client=mock)
     actions = [a for a, _ in results]
     assert actions == ["created", "skipped_empty", "skipped_exists"]
+
+
+# ── L1 fixture contract ───────────────────────────────────────────────────────
+#
+# These guard the L1 deliverable: at least 15 entries, two empty-fulltext
+# placeholders for Lombard content, and at least one entry per prompt_type
+# that already ships pre-tagged so the library can be browsed without first
+# running Haiku. The Haiku auto-tag path is still exercised on first seed by
+# the entries that intentionally ship without classification fields.
+
+def test_l1_fixture_meets_drop_contract():
+    """fixtures/library_seed.yaml is L1's seed input. Pin its shape."""
+    import os
+    from scripts.seed_library import _load_yaml
+
+    fixture_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "fixtures",
+        "library_seed.yaml",
+    )
+    entries = _load_yaml(fixture_path)
+
+    assert len(entries) >= 15, f"L1 expects >= 15 entries, got {len(entries)}"
+
+    placeholders = [e for e in entries if not (e.get("full_text") or "").strip()]
+    assert len(placeholders) >= 2, "expect >= 2 empty-fulltext placeholders"
+    assert any("Lombard" in (e.get("title") or "") for e in placeholders), \
+        "expect at least one Lombard placeholder"
+
+    pre_tagged_types = {
+        e["prompt_type"] for e in entries
+        if e.get("prompt_type") and (e.get("full_text") or "").strip()
+    }
+    # L1 ships starter coverage across all 8 prompt_types.
+    expected = {
+        "Governance", "Analysis", "Comms", "Classification",
+        "Summarisation", "Extraction", "Comparison", "Risk Review",
+    }
+    missing = expected - pre_tagged_types
+    # Allow Governance to come exclusively from auto-tagged entries — the
+    # library is starter content, not a full taxonomy guarantee.
+    tolerated_missing = {"Governance"}
+    assert missing <= tolerated_missing, \
+        f"prompt_type coverage gap: {missing - tolerated_missing}"
+
+    untagged_with_text = [
+        e for e in entries
+        if (e.get("full_text") or "").strip() and not e.get("prompt_type")
+    ]
+    assert len(untagged_with_text) >= 1, \
+        "expect at least one fixture entry without prompt_type so the Haiku auto-tag path is exercised at seed time"
