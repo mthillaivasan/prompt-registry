@@ -4,7 +4,7 @@ from typing import Literal
 
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 PromptType = Literal[
     "Governance",
@@ -441,6 +441,42 @@ class PromptLibraryUpdate(BaseModel):
     classification_notes: str | None = None
 
 
+SourceCategory = Literal["Internal", "Public", "Vendor"]
+
+# Substrings that mark a provenance string as a public-vendor source.
+# Lower-cased before comparison. Match anywhere in the string.
+_PUBLIC_SOURCE_MARKERS = (
+    "docs.claude.com",
+    "docs.anthropic.com",
+    "anthropic cookbook",
+    "openai",
+    "langchain",
+    "promptbase",
+    "huggingface",
+    "github.com/anthropics",
+)
+
+
+def derive_source_category(source_provenance: str | None) -> SourceCategory:
+    """Bucket a free-form source_provenance string into Internal/Public/Vendor.
+
+    Rule (per Drop L1 follow-up spec):
+      - "Authored for Prompt Registry" anywhere → Internal
+      - contains a known public-source marker (docs.claude.com, named public
+        prompt libraries) → Public
+      - everything else → Vendor
+
+    Empty / None defaults to Vendor — the registry never authored it and we
+    can't prove it's public, so the conservative bucket is the third-party one.
+    """
+    s = (source_provenance or "").lower()
+    if "authored for prompt registry" in s:
+        return "Internal"
+    if any(marker in s for marker in _PUBLIC_SOURCE_MARKERS):
+        return "Public"
+    return "Vendor"
+
+
 class PromptLibraryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -464,6 +500,11 @@ class PromptLibraryOut(BaseModel):
         if isinstance(v, str):
             return json.loads(v) if v else []
         return v
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def source_category(self) -> SourceCategory:
+        return derive_source_category(self.source_provenance)
 
 
 class PromptLibraryListOut(BaseModel):

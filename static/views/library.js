@@ -82,11 +82,12 @@
       html += '</tr></thead><tbody>';
       for (const e of _state.items) {
         const topics = (e.topic_coverage || []).length;
+        const sourceBadge = _sourceCategoryBadge(e.source_category);
         html += '<tr data-id="' + escAttr(e.library_id) + '">';
         html += '<td><strong>' + esc(e.title) + '</strong>'
               + (topics ? '<br><span style="font-size:11px;color:var(--text2)" class="mono">' + topics + ' topic' + (topics === 1 ? '' : 's') + '</span>' : '')
               + '</td>';
-        html += '<td><span class="badge badge-blue">' + esc(e.prompt_type) + '</span></td>';
+        html += '<td><span class="badge badge-blue">' + esc(e.prompt_type) + '</span> ' + sourceBadge + '</td>';
         html += '<td><span class="mono" style="font-size:12px">' + esc(e.domain) + '</span></td>';
         html += '<td style="font-size:13px">' + esc(e.input_type || '—') + '</td>';
         html += '<td style="font-size:13px">' + esc(e.output_type || '—') + '</td>';
@@ -149,6 +150,16 @@
       await _loadPage();
       _render();
     } catch (e) { toast(e.message, 'error'); }
+  }
+
+  function _sourceCategoryBadge(category) {
+    // Server-derived category lives on entry.source_category. Older list
+    // payloads predating the field render no badge — graceful fallback.
+    if (!category) return '';
+    const colour = category === 'Internal' ? 'badge-green'
+                 : category === 'Public'   ? 'badge-blue'
+                 : 'badge-purple';
+    return '<span class="badge ' + colour + '" title="Source: ' + escAttr(category) + '">' + esc(category) + '</span>';
   }
 
   function _toggleDetail(id) {

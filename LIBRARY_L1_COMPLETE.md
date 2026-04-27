@@ -108,4 +108,18 @@ Logged here rather than implemented (configuration-first / lean-refactor rule):
 
 ---
 
+## Follow-up — source-category visibility on the list view (2026-04-27)
+
+Source provenance was already captured per entry but only visible after clicking into edit. The admin list now renders a small `Internal | Public | Vendor` badge inline with the existing prompt_type badge.
+
+**Implementation.** Derivation lives server-side as `derive_source_category(source_provenance)` in `app/schemas.py`, surfaced as a Pydantic `computed_field` on `PromptLibraryOut`. The list payload now ships a `source_category` field per item; `static/views/library.js` renders it as a green/blue/purple badge keyed off the category string.
+
+**Why server-side, not client-side.** Single source of truth — the rule is testable from Python with the existing test infrastructure, the `/library/relevant` consumer (Brief Builder) gets the same categorisation if/when it surfaces source, and a future filter-by-provenance dropdown only needs to read the same field.
+
+**Why Option A (badge) over Option B (truncated string).** The list table already has 7 columns and is badge-heavy by design. A small inline badge fits the existing pattern with zero added vertical space; a 40-char caption under each title would compete visually with the existing topic-count caption already living there. Categorisation is also a more useful sort/filter dimension than a truncated free-text string.
+
+**Categorisation rule.** "Authored for Prompt Registry" → Internal. Substring match on a small list of public-source markers (`docs.claude.com`, `docs.anthropic.com`, `anthropic cookbook`, `openai`, `langchain`, `promptbase`, `huggingface`, `github.com/anthropics`) → Public. Everything else, including null provenance and per-firm internal libraries (e.g. "Lombard internal prompt library"), → Vendor. Lower-cased before comparison so curator capitalisation drift doesn't matter.
+
+**Test added.** `test_list_library_includes_source_category` creates entries spanning all three categories (plus a null-provenance edge case), hits `GET /library`, and asserts every list item carries the right `source_category`. 17 library tests now passing (was 16).
+
 *End of L1 sign-off.*

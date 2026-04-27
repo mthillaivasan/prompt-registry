@@ -344,3 +344,46 @@ def test_l1_fixture_meets_drop_contract():
     ]
     assert len(untagged_with_text) >= 1, \
         "expect at least one fixture entry without prompt_type so the Haiku auto-tag path is exercised at seed time"
+
+
+# ── Source-category visibility on the list endpoint ───────────────────────────
+#
+# Source provenance is captured per entry but easy to lose sight of when
+# scanning the admin list. The list endpoint exposes a derived source_category
+# (Internal / Public / Vendor) so the UI can render it as a badge alongside
+# prompt_type. This test pins the categorisation rule and the field's
+# presence on the list payload.
+
+def test_list_library_includes_source_category(client, db):
+    _make_user(db, "admin@test.local", "Admin")
+    headers = _login(client, "admin@test.local")
+
+    cases = [
+        ("Internal-A", "Authored for Prompt Registry seed library, 2026", "Internal"),
+        ("Public-A", "https://docs.claude.com/en/resources/prompt-library/cite-your-sources", "Public"),
+        ("Public-B", "Adapted from Anthropic Cookbook (github.com/anthropics/anthropic-cookbook)", "Public"),
+        ("Vendor-A", "Lombard internal prompt library", "Vendor"),
+        ("Vendor-B", None, "Vendor"),  # null provenance defaults to Vendor
+    ]
+
+    for title, provenance, _ in cases:
+        body = {
+            "title": title,
+            "full_text": "text",
+            "prompt_type": "Extraction",
+            "domain": "general",
+        }
+        if provenance is not None:
+            body["source_provenance"] = provenance
+        resp = client.post("/library", json=body, headers=headers)
+        assert resp.status_code == 201, resp.text
+
+    listing = client.get("/library?page_size=100", headers=headers).json()
+    by_title = {item["title"]: item for item in listing["items"]}
+
+    for title, _, expected_category in cases:
+        item = by_title[title]
+        assert "source_category" in item, \
+            f"list payload must expose source_category (missing on {title})"
+        assert item["source_category"] == expected_category, \
+            f"{title}: expected {expected_category}, got {item['source_category']}"
