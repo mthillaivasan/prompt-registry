@@ -923,7 +923,22 @@
     const history = (entry.conversation_history || []).map(e => Object.assign({}, e, { topic_id: topicId }));
     topicState[topicId] = Object.assign({}, entry, { _validating: true });
     renderStep();
-    const cachedRefs = (entry._references || []).map(r => ({ title: r.title, excerpt: r.excerpt }));
+    // Drop L2: validate-topic gets approved-only references for the focal
+    // topic. If the user expanded "See reference" earlier, _references is
+    // already cached. Otherwise pull fresh from the approved-references
+    // endpoint so coaching reflects approval state without forcing the user
+    // to expand the panel first.
+    let refs = entry._references;
+    if (!Array.isArray(refs) && briefId) {
+      try {
+        const qs = new URLSearchParams({ topic_id: topicId });
+        const fetched = await api('/briefs/' + briefId + '/library-references?' + qs.toString());
+        refs = Array.isArray(fetched) ? fetched : [];
+      } catch (e) {
+        refs = [];
+      }
+    }
+    const cachedRefs = (refs || []).map(r => ({ title: r.title, excerpt: r.excerpt }));
     try {
       const resp = await api('/prompts/briefs/validate-topic', { method: 'POST', body: {
         topic_id: topicId,
