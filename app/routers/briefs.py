@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import AuditLog, Brief, User
-from app.schemas import BriefCreate, BriefOut, BriefUpdate
+from app.models import AuditLog, Brief, PromptLibrary, User
+from app.schemas import BriefCreate, BriefOut, BriefUpdate, PromptType
+from services.library_excerpt import extract_topic_excerpt
+from services.library_matching import match_library
 
 router = APIRouter(prefix="/briefs", tags=["briefs"])
 
@@ -74,6 +76,180 @@ def get_brief(
     if not brief:
         raise HTTPException(status_code=404, detail="Brief not found")
     return BriefOut.model_validate(brief)
+
+
+def _approved_ids(brief: Brief) -> list[str]:
+    try:
+        return json.loads(brief.approved_library_refs or "[]")
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def _brief_topic_signal(brief: Brief) -> tuple[str | None, str | None, list[str]]:
+    """Derive the matching context (prompt_type, domain, topic_coverage signal)
+    from a brief's stored step_answers + metadata.
+
+    prompt_type: from topic_1_prompt_type pick. Multi-select rule: prefer
+    "Extraction" if present, else first picked, else None.
+
+    domain: derived from whether the brief carries a client_name. A
+    populated client_name implies a regulated-finance use case in this
+    registry, so finance-tagged library entries get the domain bonus.
+    Empty client_name leaves domain unset (no bonus, no penalty).
+
+    topic_coverage signal: every prose topic with a non-red state in
+    step_answers. The signal answers "what topics has the user already
+    thought about?" — library entries that have *also* worked through
+    those topics rank highest.
+    """
+    try:
+        answers = json.loads(brief.step_answers or "{}")
+    except (json.JSONDecodeError, TypeError):
+        answers = {}
+
+    prompt_type = None
+    pt_entry = answers.get("topic_1_prompt_type")
+    if isinstance(pt_entry, dict):
+        v = pt_entry.get("value")
+        picks = v if isinstance(v, list) else ([v] if v else [])
+        if picks:
+            prompt_type = "Extraction" if "Extraction" in picks else picks[0]
+
+    domain = "finance" if (brief.client_name or "").strip() else None
+
+    topic_signal: list[str] = []
+    for key, entry in answers.items():
+        if not key.startswith("topic_"):
+            continue
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("state") in ("amber", "green"):
+            topic_signal.append(key)
+
+    return prompt_type, domain, topic_signal
+
+
+@router.get("/{brief_id}/library-matches")
+def list_library_matches(
+    brief_id: str,
+    limit: int = Query(3, ge=0, le=20),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return ranked library candidates for this brief's context.
+
+    The Brief Builder UI surfaces these as suggested references. Each
+    payload carries `approved` so the panel can show which ones the user
+    has already opted into. Approval is persisted via PATCH /briefs/{id}
+    with `approved_library_refs`; see the L2 design rule that user
+    approval gates downstream consumption.
+    """
+    brief = db.query(Brief).filter(Brief.brief_id == brief_id).first()
+    if not brief:
+        raise HTTPException(status_code=404, detail="Brief not found")
+
+    prompt_type, domain, topic_signal = _brief_topic_signal(brief)
+    if not prompt_type:
+        # No prompt_type picked yet — no matches to surface. Empty list keeps
+        # the UI's "no references found" path uniform with the genuinely-empty
+        # case (library has no Extraction entries, etc.).
+        return []
+
+    approved = set(_approved_ids(brief))
+    matches = match_library(
+        db,
+        prompt_type=prompt_type,
+        domain=domain,
+        topic_coverage=topic_signal,
+        limit=limit,
+    )
+    return [
+        {
+            "library_id": entry.library_id,
+            "title": entry.title,
+            "summary": entry.summary,
+            "source_provenance": entry.source_provenance,
+            "domain": entry.domain,
+            "topic_coverage": _safe_topic_coverage(entry),
+            "score": score,
+            "approved": entry.library_id in approved,
+        }
+        for entry, score in matches
+    ]
+
+
+def _safe_topic_coverage(entry: PromptLibrary) -> list[str]:
+    try:
+        return json.loads(entry.topic_coverage or "[]")
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+@router.get("/{brief_id}/library-references")
+def list_library_references(
+    brief_id: str,
+    topic_id: str | None = Query(None, min_length=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return user-approved library references for downstream consumption.
+
+    Two shapes depending on `topic_id`:
+
+      - With topic_id: returns excerpts matching that topic (drives
+        validate-topic few-shot context). Entries whose excerpt extractor
+        returns None — i.e. the entry's full_text doesn't address the
+        topic — are dropped, mirroring /library/relevant.
+
+      - Without topic_id: returns each approved entry's title, summary,
+        and full_text (drives generator structural-reference context).
+
+    Authorisation: any authenticated user. Same posture as
+    /library/relevant — Makers building briefs are the primary
+    consumers and the data is reference content, not sensitive.
+    """
+    brief = db.query(Brief).filter(Brief.brief_id == brief_id).first()
+    if not brief:
+        raise HTTPException(status_code=404, detail="Brief not found")
+
+    approved = _approved_ids(brief)
+    if not approved:
+        return []
+
+    entries = (
+        db.query(PromptLibrary)
+        .filter(PromptLibrary.library_id.in_(approved))
+        .all()
+    )
+    # Preserve approval-list order so the UI can show "first approved
+    # surfaces first" if it wants ordering control.
+    by_id = {e.library_id: e for e in entries}
+    ordered = [by_id[i] for i in approved if i in by_id]
+
+    if topic_id:
+        out = []
+        for e in ordered:
+            excerpt = extract_topic_excerpt(e.full_text, topic_id)
+            if not excerpt:
+                continue
+            out.append({
+                "library_id": e.library_id,
+                "title": e.title,
+                "source_provenance": e.source_provenance,
+                "excerpt": excerpt,
+            })
+        return out
+
+    return [
+        {
+            "library_id": e.library_id,
+            "title": e.title,
+            "summary": e.summary,
+            "source_provenance": e.source_provenance,
+            "full_text": e.full_text,
+        }
+        for e in ordered
+    ]
 
 
 @router.patch("/{brief_id}", response_model=BriefOut)

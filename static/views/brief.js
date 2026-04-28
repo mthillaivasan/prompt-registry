@@ -92,6 +92,15 @@
 
   let topicState = {}; // { topic_id: { value, state: 'red'|'amber'|'green', updated_at, conversation_history?, probe? } }
   let expandedTopic = null; // id of the currently-expanded topic, or null
+  // Drop L2: matched library candidates the user can approve as references.
+  // Approval state lives server-side on briefs.approved_library_refs and is
+  // mirrored here for rendering. Approved refs flow into validate-topic
+  // (per-topic excerpts) and the generator (full_text); unapproved matches
+  // never reach Claude. See PHASE3.md "speed-to-v1" — refs are passive
+  // context on v1, surfaced for scanning, not interrogative.
+  let libraryMatches = []; // [{library_id, title, summary, source_provenance, domain, topic_coverage, score, approved}]
+  let libraryMatchesLoaded = false;
+  let libraryMatchesLoading = false;
 
   // B2: prose topics. All share state.purpose as their topic_answer; each has
   // its own state pill and its own conversation_history scoped by topic_id.
@@ -122,6 +131,7 @@
     validationResult = null; tier3Count = 0; tier3Selected.clear(); briefScore = null; restructuredBrief = null; restructuredTitle = null; useRestructured = true;
     validating = false; validationSeq = 0;
     topicState = {}; expandedTopic = null;
+    libraryMatches = []; libraryMatchesLoaded = false; libraryMatchesLoading = false;
     for (const k in proseTopicPicks) delete proseTopicPicks[k];
     window._briefConversation = []; window._briefQuestionCount = {};
     guardrailData = null; briefId = null;
@@ -220,6 +230,10 @@
     window._inBrief = true;
     window._briefHasContent = false;
     renderStep();
+    // Resumed brief lands at whatever step user left on. If that's Step 2,
+    // kick off the library-matches load now (Next handler covers the
+    // step-1→step-2 transition). Same for jumpTo.
+    if (step === 2 && briefId && !libraryMatchesLoaded) _loadLibraryMatches();
   };
 
   function isStepValid() {
@@ -337,6 +351,7 @@
       if (validationError && !isValid) {
         html += `<p style="color:var(--amber);font-size:13px;margin-top:-8px">${getValidationHint()}</p>`;
       }
+      html += _renderLibraryMatchesPanel();
       html += _renderProseTopicCards();
     } else if (step === 3) {
       html += `<h3 style="margin-bottom:12px">Who receives the output?</h3>
@@ -718,6 +733,108 @@
     return 'var(--text2)';
   }
 
+  // ── Drop L2 library references panel ─────────────────────────────────────
+  //
+  // Inline panel between the brief textarea and prose-topic cards on Step 2.
+  // Lists ranked candidates from the library; user marks each as Approved or
+  // Remove. Approved IDs persist on briefs.approved_library_refs and flow
+  // into validate-topic (per-topic excerpts) and the generator (full_text)
+  // through approved-references endpoints. Unapproved matches are passive
+  // context only.
+  //
+  // UI rationale (per L2 spec): an inline reference list under Step 2 keeps
+  // examples visible while the user writes the brief, which is when the
+  // examples are useful. A separate "review references" step would force a
+  // gear-change in the flow; a sidebar would compete with the prose-topic
+  // cards already on the right of focus. Inline + collapsible body fits the
+  // existing card pattern with zero new layout.
+
+  function _renderLibraryMatchesPanel() {
+    if (libraryMatchesLoading) {
+      return `<div class="card" style="margin-top:18px;padding:14px"><div class="loading-state"><div class="spinner"></div> Looking for similar prompts in the library…</div></div>`;
+    }
+    if (!libraryMatchesLoaded) return ''; // not yet fetched on this render
+    if (!libraryMatches || libraryMatches.length === 0) return '';
+    let html = `<div class="card" style="margin-top:18px;padding:14px;border-left:3px solid var(--teal)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:14px;font-weight:600;color:var(--teal)">Similar prompts in the library</span>
+        <span style="font-size:12px;color:var(--text2)">Approve any you'd like to use as a reference. Coaching and the generator will pull from approved entries only.</span>
+      </div>`;
+    libraryMatches.forEach(m => {
+      const isApproved = !!m.approved;
+      const approveCls = isApproved ? 'btn btn-gold btn-sm' : 'btn btn-outline btn-sm';
+      const approveLabel = isApproved ? '&#10003; Approved' : 'Approve as reference';
+      const removeCls = 'btn btn-outline btn-sm';
+      html += `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">${esc(m.title)}</div>`;
+      if (m.source_provenance) {
+        html += `<div style="font-size:11px;color:var(--text2);margin-top:2px">${esc(m.source_provenance)}</div>`;
+      }
+      if (m.summary) {
+        html += `<div style="font-size:12px;color:var(--text2);margin-top:4px">${esc(m.summary)}</div>`;
+      }
+      html += `</div>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+            <button class="${approveCls}" data-libid="${escAttr(m.library_id)}" data-approve="${isApproved ? '0' : '1'}" onclick="window._briefToggleLibraryRef(this.dataset.libid, this.dataset.approve === '1')">${approveLabel}</button>`;
+      if (isApproved) {
+        html += `<button class="${removeCls}" data-libid="${escAttr(m.library_id)}" onclick="window._briefToggleLibraryRef(this.dataset.libid, false)">Remove</button>`;
+      }
+      html += `</div>
+        </div>
+      </div>`;
+    });
+    html += `<div style="font-size:11px;color:var(--text2);margin-top:8px;font-style:italic">Approved references appear as illustration during topic coaching, then anchor structure when the prompt is generated.</div>
+    </div>`;
+    return html;
+  }
+
+  async function _loadLibraryMatches() {
+    if (!briefId) return;
+    libraryMatchesLoading = true;
+    renderStep();
+    try {
+      const matches = await api('/briefs/' + briefId + '/library-matches?limit=3');
+      libraryMatches = Array.isArray(matches) ? matches : [];
+    } catch (e) {
+      libraryMatches = [];
+      console.warn('[Brief] library-matches load failed:', (e && e.message) || e);
+    }
+    libraryMatchesLoaded = true;
+    libraryMatchesLoading = false;
+    renderStep();
+  }
+
+  window._briefToggleLibraryRef = async function (libraryId, approve) {
+    if (!briefId) return;
+    // Optimistic local update
+    libraryMatches = libraryMatches.map(m => (
+      m.library_id === libraryId ? Object.assign({}, m, { approved: !!approve }) : m
+    ));
+    renderStep();
+    const approvedIds = libraryMatches.filter(m => m.approved).map(m => m.library_id);
+    try {
+      await api('/briefs/' + briefId, { method: 'PATCH', body: { approved_library_refs: approvedIds } });
+      // Drop any cached per-topic references on prose cards — they may now be
+      // out of date because the approved set just changed.
+      for (const k in topicState) {
+        if (topicState[k] && topicState[k]._references) {
+          delete topicState[k]._references;
+          delete topicState[k]._referencesShown;
+        }
+      }
+      renderStep();
+    } catch (e) {
+      // Revert on failure
+      libraryMatches = libraryMatches.map(m => (
+        m.library_id === libraryId ? Object.assign({}, m, { approved: !approve }) : m
+      ));
+      renderStep();
+      toast('Failed to save approval: ' + ((e && e.message) || 'unknown error'), 'error');
+    }
+  };
+
   function _renderProseTopicCards() {
     let html = '<div style="margin-top:20px">';
     html += '<h4 style="font-size:14px;margin-bottom:10px;color:var(--text2);font-weight:600">Topic coaching</h4>';
@@ -867,17 +984,23 @@
       renderStep();
       return;
     }
-    // First open: fetch matching references for this prompt_type + topic_id.
+    // Drop L2 change: per-topic excerpts come from the user-approved set
+    // only. /library/relevant returns any matching entry; the approved-
+    // references endpoint filters to entries the user has explicitly
+    // approved on this brief. No approval = empty excerpts. Keeps the
+    // load-bearing rule simple: matched-but-unapproved examples never
+    // leak into coaching context.
     const promptType = _selectedPromptTypeForRubric();
     if (!promptType) {
       toast('Pick a prompt type first', 'error');
       return;
     }
+    if (!briefId) return;
     topicState[topicId] = Object.assign({}, entry, { _referencesLoading: true });
     renderStep();
     try {
-      const qs = new URLSearchParams({ prompt_type: promptType, topic_id: topicId, limit: 3 });
-      const refs = await api('/library/relevant?' + qs.toString());
+      const qs = new URLSearchParams({ topic_id: topicId });
+      const refs = await api('/briefs/' + briefId + '/library-references?' + qs.toString());
       topicState[topicId] = Object.assign({}, topicState[topicId], {
         _references: Array.isArray(refs) ? refs : [],
         _referencesShown: Array.isArray(refs) && refs.length > 0,
@@ -1078,6 +1201,11 @@
     await saveBriefToServer();
     if (step === 5 && !guardrailData) { renderStep(); loadGuardrails(); }
     else renderStep();
+    // Drop L2: arriving at Step 2 — fetch library candidates once we have a
+    // server-side brief (saveBriefToServer creates one if needed). Fire after
+    // renderStep so the panel slot exists; the loader sets a loading state
+    // and re-renders when done.
+    if (step === 2 && briefId && !libraryMatchesLoaded) _loadLibraryMatches();
   };
   window._briefReview = async function () {
     saveStepState();
