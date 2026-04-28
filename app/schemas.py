@@ -109,6 +109,16 @@ class VersionCreate(BaseModel):
 
 # ── Generate schema ─────────────────────────────────────────────────────────
 
+class StructuralReference(BaseModel):
+    """A library example the user has approved as structural reference for
+    the generator. Drop L2: feeds the prompt assembly with title + summary +
+    full_text so Claude can mirror good structure without copying text.
+    """
+    title: str
+    summary: str | None = None
+    full_text: str
+
+
 class GenerateRequest(BaseModel):
     title: str = Field(min_length=1)
     prompt_type: PromptType
@@ -121,6 +131,10 @@ class GenerateRequest(BaseModel):
     # Transitional: see PromptCreate above.
     ai_platform: str = "Claude"
     output_destination: str | None = None
+    # Drop L2: user-approved library entries. When non-empty, the generator
+    # appends a structural-reference block to the user message so Claude can
+    # mirror proven prompt shape. Empty list = no behaviour change vs L1.
+    reference_examples: list[StructuralReference] = []
 
 
 class GenerateResponse(BaseModel):

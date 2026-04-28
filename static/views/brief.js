@@ -1265,6 +1265,25 @@
     window._inBrief = false;
     window._briefHasContent = false;
     const guardrails = [...state.selectedGuardrails];
+    // Drop L2: hand approved library references off to the generator before
+    // the navigate/complete cycle, so the next-tick hydration on the
+    // generator screen has them ready. Server returns full_text + summary
+    // for each approved entry; absent / empty list is the v1 default.
+    let referenceExamples = [];
+    if (briefId) {
+      try {
+        const refs = await api('/briefs/' + briefId + '/library-references');
+        if (Array.isArray(refs)) {
+          referenceExamples = refs.map(r => ({
+            title: r.title,
+            summary: r.summary || null,
+            full_text: r.full_text,
+          }));
+        }
+      } catch (e) {
+        console.warn('Approved-references fetch failed; generating without references.', e && e.message);
+      }
+    }
     if (briefId) {
       try {
         await api('/briefs/' + briefId, { method: 'PATCH', body: {
@@ -1310,6 +1329,7 @@
 
       window._briefSelectedGuardrails = guardrails;
       window._briefConstraints = [...state.constraints];
+      window._briefReferenceExamples = referenceExamples;
       window._briefPrefilled = true;
       toast('Brief loaded. Click Generate with AI to create your prompt.');
     }, 100);

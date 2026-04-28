@@ -225,6 +225,12 @@ async function genAI() {
       body.constraints = window._briefConstraints;
       window._briefConstraints = null;
     }
+    // Drop L2: user-approved library references handed off from the brief.
+    // Empty / absent = no behaviour change vs L1.
+    if (window._briefReferenceExamples && window._briefReferenceExamples.length) {
+      body.reference_examples = window._briefReferenceExamples;
+      window._briefReferenceExamples = null;
+    }
     const resp = await api('/prompts/generate', { method: 'POST', body });
     textarea.value = resp.prompt_text;
     textarea.style.height = 'auto';

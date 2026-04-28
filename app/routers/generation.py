@@ -534,6 +534,24 @@ def generate_prompt_text(
     if assembled.get("example"):
         brief_parts.append(f"\n{assembled['example']}")
 
+    # Drop L2: user-approved structural references. The generator sees them
+    # as illustration only — Claude must not copy verbatim, but can mirror
+    # structure (sectioning, output shape, constraints). Empty list (no
+    # approval) leaves the assembly unchanged.
+    if body.reference_examples:
+        ref_blocks = []
+        for ref in body.reference_examples:
+            block = f"### {ref.title}"
+            if ref.summary:
+                block += f"\nSummary: {ref.summary}"
+            block += f"\n\n{ref.full_text}"
+            ref_blocks.append(block)
+        brief_parts.append(
+            "\nSTRUCTURAL REFERENCE EXAMPLES (illustration only — do not copy verbatim; "
+            "mirror proven structure such as sectioning, output shape, and constraint "
+            "language where it fits the brief):\n\n" + "\n\n---\n\n".join(ref_blocks)
+        )
+
     user_message = "BRIEF:\n" + "\n".join(brief_parts) + "\n\nGenerate the prompt now. Include all component blocks verbatim. If an output example is provided, follow its exact structure."
 
     try:
