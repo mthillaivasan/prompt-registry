@@ -46,6 +46,8 @@ def run_migrations(engine) -> None:
             resulting_prompt_id VARCHAR(36)
         """, is_sqlite)
         _add_column(conn, "briefs", "title", "VARCHAR", is_sqlite)
+        # Drop L2: per-brief approved library references.
+        _add_column(conn, "briefs", "approved_library_refs", "TEXT NOT NULL DEFAULT '[]'", is_sqlite)
 
         _create_table_if_not_exists(conn, "prompt_components", """
             component_id VARCHAR(36) PRIMARY KEY,

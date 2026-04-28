@@ -107,6 +107,8 @@ def update_brief(
         brief.business_owner_name = body.business_owner_name
     if body.business_owner_role is not None:
         brief.business_owner_role = body.business_owner_role
+    if body.approved_library_refs is not None:
+        brief.approved_library_refs = json.dumps(body.approved_library_refs)
 
     brief.updated_at = _utcnow()
     db.add(AuditLog(
@@ -151,6 +153,8 @@ def save_step(
         brief.business_owner_name = body.business_owner_name
     if body.business_owner_role is not None:
         brief.business_owner_role = body.business_owner_role
+    if body.approved_library_refs is not None:
+        brief.approved_library_refs = json.dumps(body.approved_library_refs)
 
     brief.step_progress = max(brief.step_progress, step_num)
     brief.updated_at = _utcnow()

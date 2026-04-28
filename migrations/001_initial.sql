@@ -256,6 +256,10 @@ CREATE TABLE briefs (
     interviewer_id        TEXT REFERENCES users(user_id),
     step_answers          TEXT NOT NULL DEFAULT '{}',
     selected_guardrails   TEXT NOT NULL DEFAULT '[]',
+    -- Drop L2: library_ids the user has approved as references for this
+    -- brief. Approved entries flow downstream into validate-topic few-shot
+    -- context and into the generator as structural references.
+    approved_library_refs TEXT NOT NULL DEFAULT '[]',
     restructured_brief    TEXT,
     created_at            TEXT NOT NULL,
     updated_at            TEXT NOT NULL,

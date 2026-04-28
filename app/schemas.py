@@ -231,6 +231,7 @@ class BriefUpdate(BaseModel):
     client_name: str | None = None
     business_owner_name: str | None = None
     business_owner_role: str | None = None
+    approved_library_refs: list[str] | None = None
 
 
 class BriefOut(BaseModel):
@@ -248,11 +249,19 @@ class BriefOut(BaseModel):
     interviewer_id: str | None
     step_answers: str
     selected_guardrails: str
+    approved_library_refs: list[str] = Field(default_factory=list)
     restructured_brief: str | None
     created_at: str
     updated_at: str
     submitted_at: str | None
     resulting_prompt_id: str | None
+
+    @field_validator("approved_library_refs", mode="before")
+    @classmethod
+    def _parse_approved_library_refs(cls, v):
+        if isinstance(v, str):
+            return json.loads(v) if v else []
+        return v or []
 
 
 # ── Compliance schemas ───────────────────────────────────────────────────────

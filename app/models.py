@@ -362,6 +362,12 @@ class Brief(Base):
     interviewer_id = Column(String(36), ForeignKey("users.user_id"), nullable=True)
     step_answers = Column(Text, nullable=False, default="{}")
     selected_guardrails = Column(Text, nullable=False, default="[]")
+    # JSON array of library_ids the user has approved as references for this
+    # brief. Populated by Brief Builder's library-references panel (Drop L2).
+    # Approved entries flow into validate-topic as few-shot context and into
+    # the generator as structural references; an empty array means no library
+    # examples are pushed downstream — user-approved is the gate.
+    approved_library_refs = Column(Text, nullable=False, default="[]")
     restructured_brief = Column(Text, nullable=True)
     created_at = Column(String, nullable=False, default=_utcnow)
     updated_at = Column(String, nullable=False, default=_utcnow)
