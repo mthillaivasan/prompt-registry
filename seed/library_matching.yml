@@ -1,0 +1,32 @@
+# Library matching configuration (Drop L2).
+#
+# Drives services/library_matching.py. Loaded once per process, cached.
+#
+# Why a config file: the matching weights and the default top-N are the
+# levers most likely to move as the library grows and we observe which
+# matches users approve vs reject. Hard-coding them in execution code
+# would re-introduce the configuration-first violation L1 took pains to
+# avoid.
+
+# Default number of candidates returned to the Brief Builder when the
+# caller does not pin a limit.
+default_top_n: 3
+
+# Score weights. Higher = stronger ranking signal. Ranking is by raw score
+# desc, ties broken by created_at desc (newest entries surface first when
+# all else is equal).
+#
+#   topic_coverage_weight × overlap_count
+#       + (domain_match_weight if candidate.domain == requested.domain else 0)
+#
+# topic_coverage is the strongest signal — it reflects which Brief Builder
+# topics the entry has actually worked through. Domain is a softer
+# preference; cross-domain matches are still useful when topic overlap is
+# strong.
+topic_coverage_weight: 2.0
+domain_match_weight: 1.0
+
+# Minimum raw score for a candidate to be considered. 0 = no floor (any
+# prompt_type-matching entry is eligible). Raising this cuts noise once
+# the library grows past low hundreds; not needed at L1/L2 scale.
+min_score: 0.0
